@@ -10,9 +10,8 @@ description=Generates editable contour lines from point elevations and raster su
 about=Contour Flow is an open-source, single-purpose QGIS plugin: point or raster data in, editable contour lines out. It interpolates a numeric field of a point layer (for example groundwater, ground-surface, bedrock or survey elevations) with QGIS's own TIN Linear, TIN Clough-Tocher or IDW algorithms, or contours an existing raster/DEM with GDAL. It offers automatic or fixed intervals, exact clipping to a boundary polygon, optional smoothing, major/minor contours, labels and style presets, and writes temporary layers or GeoPackage layers (plus an optional GeoTIFF surface). All settings are stored in the output layer's metadata. Interpolated contours are estimates derived from the supplied data; results should be reviewed by an appropriately qualified user before technical or professional use. No dependencies beyond QGIS and its Processing plugin.
 version=0.1.0
 author=Michael Holmes
-; TODO (release blocker): a public contact email is required by the QGIS plugin repository.
-; It is shown to logged-in users on plugins.qgis.org and in the Plugin Manager after installation.
-email=TODO-contact-email@example.com
+; Public support contact. Shown to logged-in users on plugins.qgis.org and in the Plugin Manager after installation.
+email=lunartidesoftware@gmail.com
 repository=https://github.com/Holmes-090/Contour_Flow
 
 ; Optional fields
