@@ -1,0 +1,34 @@
+; QGIS plugin metadata for Contour Generator.
+; Field reference: PyQGIS Developer Cookbook, "Writing a Python Plugin" > metadata.txt
+; Publishing rules: https://plugins.qgis.org/docs/publish
+;
+; DEVELOPMENT DRAFT (experimental, not yet released).
+; Every value marked TODO must be replaced before any public release.
+
+[general]
+; Required fields
+name=Contour Generator
+qgisMinimumVersion=3.44
+description=Generates editable vector contour lines from a point layer with a numeric field (TIN or IDW), or from an elevation raster/DEM.
+about=Contour Generator is a single-purpose plugin for making editable vector contour lines. It interpolates a numeric field of a point layer (for example groundwater elevation, ground elevation, bedrock elevation or survey elevation) with the built-in QGIS TIN or IDW algorithms, or contours an existing raster/DEM directly with GDAL. Options include extent modes, exact boundary clipping, automatic or fixed intervals, major/minor classification, smoothing, labels, style presets and temporary or GeoPackage output. Processing settings are stored in the layer metadata. Interpolated contours are estimates and require professional review. EARLY DEVELOPMENT BUILD. It has no external dependencies beyond QGIS.
+version=0.0.1
+; TODO: replace with the author's real name and a contact address before release.
+author=TODO Author Name
+email=todo@example.com
+; TODO: replace with the real public source repository URL.
+repository=https://github.com/TODO/qgis-contour-generator
+
+; Optional fields
+qgisMaximumVersion=4.99
+homepage=https://github.com/TODO/qgis-contour-generator
+tracker=https://github.com/TODO/qgis-contour-generator/issues
+category=Raster
+tags=contour,contours,isolines,interpolation,tin,idw,dem,elevation,groundwater,hydrogeology,survey
+experimental=True
+deprecated=False
+changelog=
+    0.0.1 - Development build: core contour engine plus professional controls (IDW, extent modes, clipping, smoothing, major/minor, labels, styles, GeoPackage output).
+
+; Not read by QGIS; recorded here because the plugin repository asks that
+; plugins state their license. See LICENSE in this folder.
+license=GPL-2.0-or-later

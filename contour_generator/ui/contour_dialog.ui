@@ -1,0 +1,855 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Contour Generator main dialog layout (Qt Designer file).
+  Layout only. All behaviour (filters, visibility, validation, running) lives in contour_dialog.py.
+  Loaded at runtime with qgis.PyQt.uic.loadUiType; no generated Python file is committed.
+  QGIS widgets are declared as custom widgets with header "qgis.gui".
+  Widget objectNames are used from Python: keep them in sync when editing in Qt Designer.
+-->
+<ui version="4.0">
+ <class>ContourDialogBase</class>
+ <widget class="QDialog" name="ContourDialogBase">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>520</width>
+    <height>820</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Contour Generator</string>
+  </property>
+  <layout class="QVBoxLayout" name="main_layout">
+   <item>
+    <widget class="QLabel" name="intro_label">
+     <property name="text">
+      <string>Generate editable contour lines from point elevations or raster surfaces.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QgsMessageBar" name="message_bar"/>
+   </item>
+   <item>
+    <widget class="QScrollArea" name="scroll_area">
+     <property name="widgetResizable">
+      <bool>true</bool>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::NoFrame</enum>
+     </property>
+     <widget class="QWidget" name="scroll_contents">
+      <layout class="QVBoxLayout" name="scroll_layout">
+       <item>
+        <widget class="QGroupBox" name="input_group">
+         <property name="title">
+          <string>Input</string>
+         </property>
+         <layout class="QVBoxLayout" name="input_layout">
+          <item>
+           <layout class="QFormLayout" name="source_form">
+            <item row="0" column="0">
+             <widget class="QLabel" name="source_caption">
+              <property name="text">
+               <string>Source:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QWidget" name="source_widget">
+              <layout class="QHBoxLayout" name="source_layout">
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <widget class="QRadioButton" name="point_mode_radio">
+                 <property name="text">
+                  <string>Point layer</string>
+                 </property>
+                 <property name="checked">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QRadioButton" name="raster_mode_radio">
+                 <property name="text">
+                  <string>Raster</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <spacer name="source_spacer">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>40</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+              </layout>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QWidget" name="point_input_widget">
+            <layout class="QFormLayout" name="point_input_layout">
+             <item row="0" column="0">
+              <widget class="QLabel" name="point_layer_caption">
+               <property name="text">
+                <string>Point layer:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QgsMapLayerComboBox" name="point_layer_combo"/>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="value_field_caption">
+               <property name="text">
+                <string>Value / elevation field:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QgsFieldComboBox" name="value_field_combo"/>
+             </item>
+             <item row="2" column="0">
+              <widget class="QLabel" name="feature_mode_caption">
+               <property name="text">
+                <string>Features:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QComboBox" name="feature_mode_combo"/>
+             </item>
+             <item row="3" column="0">
+              <widget class="QLabel" name="selection_count_caption">
+               <property name="text">
+                <string>Selected count:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="1">
+              <widget class="QLabel" name="selection_count_label">
+               <property name="text">
+                <string notr="true">-</string>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="0">
+              <widget class="QLabel" name="duplicate_mode_caption">
+               <property name="text">
+                <string>Duplicate locations:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="1">
+              <widget class="QComboBox" name="duplicate_mode_combo">
+               <property name="toolTip">
+                <string>Points at exactly the same location. Different values there may be different wells, screens or intervals.</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QWidget" name="raster_input_widget">
+            <layout class="QFormLayout" name="raster_input_layout">
+             <item row="0" column="0">
+              <widget class="QLabel" name="raster_layer_caption">
+               <property name="text">
+                <string>Raster layer:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QgsMapLayerComboBox" name="raster_layer_combo"/>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="raster_band_caption">
+               <property name="text">
+                <string>Band:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QgsRasterBandComboBox" name="raster_band_combo"/>
+             </item>
+            </layout>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="interpolation_group">
+         <property name="title">
+          <string>Interpolation</string>
+         </property>
+         <layout class="QFormLayout" name="interpolation_layout">
+          <item row="0" column="0">
+           <widget class="QLabel" name="method_caption">
+            <property name="text">
+             <string>Method:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QComboBox" name="method_combo"/>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="idw_power_caption">
+            <property name="text">
+             <string>IDW power:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QDoubleSpinBox" name="idw_power_spin">
+            <property name="decimals">
+             <number>2</number>
+            </property>
+            <property name="minimum">
+             <double>0.1</double>
+            </property>
+            <property name="maximum">
+             <double>99.99</double>
+            </property>
+            <property name="value">
+             <double>2.0</double>
+            </property>
+            <property name="toolTip">
+             <string>Distance coefficient P. Higher values give nearby points more weight (2 is the usual default).</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="cell_size_caption">
+            <property name="text">
+             <string>Cell size:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QDoubleSpinBox" name="cell_size_spin">
+            <property name="decimals">
+             <number>6</number>
+            </property>
+            <property name="minimum">
+             <double>0.0</double>
+            </property>
+            <property name="maximum">
+             <double>1000000000.0</double>
+            </property>
+            <property name="value">
+             <double>0.0</double>
+            </property>
+            <property name="toolTip">
+             <string>Surface cell size in the point layer's units. Automatic: about 500 cells along the longer side of the extent.</string>
+            </property>
+            <property name="specialValueText">
+             <string>Automatic</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="extent_group">
+         <property name="title">
+          <string>Extent</string>
+         </property>
+         <layout class="QFormLayout" name="extent_layout">
+          <item row="0" column="0">
+           <widget class="QLabel" name="extent_mode_caption">
+            <property name="text">
+             <string>Interpolate over:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QComboBox" name="extent_mode_combo"/>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="buffer_caption">
+            <property name="text">
+             <string>Hull buffer:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QDoubleSpinBox" name="buffer_spin">
+            <property name="decimals">
+             <number>4</number>
+            </property>
+            <property name="minimum">
+             <double>0.0</double>
+            </property>
+            <property name="maximum">
+             <double>1000000000.0</double>
+            </property>
+            <property name="value">
+             <double>0.0</double>
+            </property>
+            <property name="toolTip">
+             <string>Buffer distance around the convex hull, in the point layer's CRS units.</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="custom_extent_caption">
+            <property name="text">
+             <string>Custom extent:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QgsExtentWidget" name="custom_extent_widget"/>
+          </item>
+          <item row="3" column="0" colspan="2">
+           <widget class="QLabel" name="extent_note_label">
+            <property name="text">
+             <string>IDW extrapolates beyond the points; TIN stops at their convex hull.</string>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="boundary_group">
+         <property name="title">
+          <string>Boundary / clipping (optional)</string>
+         </property>
+         <layout class="QFormLayout" name="boundary_layout">
+          <item row="0" column="0">
+           <widget class="QLabel" name="boundary_layer_caption">
+            <property name="text">
+             <string>Polygon layer:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QgsMapLayerComboBox" name="boundary_layer_combo"/>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="boundary_mode_caption">
+            <property name="text">
+             <string>Use:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QComboBox" name="boundary_mode_combo"/>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="boundary_count_caption">
+            <property name="text">
+             <string>Selected count:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QLabel" name="boundary_count_label">
+            <property name="text">
+             <string notr="true">-</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0" colspan="2">
+           <widget class="QLabel" name="boundary_note_label">
+            <property name="text">
+             <string>Contours are clipped exactly to the boundary.</string>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="contour_group">
+         <property name="title">
+          <string>Contours</string>
+         </property>
+         <layout class="QFormLayout" name="contour_layout">
+          <item row="0" column="0">
+           <widget class="QLabel" name="interval_mode_caption">
+            <property name="text">
+             <string>Interval:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QComboBox" name="interval_mode_combo"/>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="target_count_caption">
+            <property name="text">
+             <string>Approximate count:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QSpinBox" name="target_count_spin">
+            <property name="minimum">
+             <number>2</number>
+            </property>
+            <property name="maximum">
+             <number>200</number>
+            </property>
+            <property name="value">
+             <number>10</number>
+            </property>
+            <property name="toolTip">
+             <string>The interval is chosen from 1, 2, 2.5 or 5 x 10^n to give about this many contour levels.</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="fixed_interval_caption">
+            <property name="text">
+             <string>Fixed interval:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QDoubleSpinBox" name="fixed_interval_spin">
+            <property name="decimals">
+             <number>4</number>
+            </property>
+            <property name="minimum">
+             <double>0.0001</double>
+            </property>
+            <property name="maximum">
+             <double>1000000000.0</double>
+            </property>
+            <property name="value">
+             <double>1.0</double>
+            </property>
+            <property name="toolTip">
+             <string>Contours are drawn at multiples of this value, in the units of the value field or raster.</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0">
+           <widget class="QLabel" name="major_every_caption">
+            <property name="text">
+             <string>Major contour every:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1">
+           <widget class="QSpinBox" name="major_every_spin">
+            <property name="minimum">
+             <number>1</number>
+            </property>
+            <property name="maximum">
+             <number>1000</number>
+            </property>
+            <property name="value">
+             <number>5</number>
+            </property>
+            <property name="toolTip">
+             <string>Every Nth contour level is classified as major (is_major = 1).</string>
+            </property>
+            <property name="suffix">
+             <string> intervals</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="0">
+           <widget class="QLabel" name="smoothing_caption">
+            <property name="text">
+             <string>Smoothing:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="1">
+           <widget class="QComboBox" name="smoothing_combo"/>
+          </item>
+          <item row="5" column="0">
+           <widget class="QLabel" name="smooth_iterations_caption">
+            <property name="text">
+             <string>Iterations:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="1">
+           <widget class="QSpinBox" name="smooth_iterations_spin">
+            <property name="minimum">
+             <number>1</number>
+            </property>
+            <property name="maximum">
+             <number>5</number>
+            </property>
+            <property name="value">
+             <number>1</number>
+            </property>
+           </widget>
+          </item>
+          <item row="6" column="0">
+           <widget class="QLabel" name="smooth_offset_caption">
+            <property name="text">
+             <string>Offset:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="6" column="1">
+           <widget class="QDoubleSpinBox" name="smooth_offset_spin">
+            <property name="decimals">
+             <number>2</number>
+            </property>
+            <property name="minimum">
+             <double>0.05</double>
+            </property>
+            <property name="maximum">
+             <double>0.5</double>
+            </property>
+            <property name="value">
+             <double>0.25</double>
+            </property>
+            <property name="toolTip">
+             <string>Chaikin offset (0.05-0.5). Larger values round corners more.</string>
+            </property>
+           </widget>
+          </item>
+          <item row="7" column="0" colspan="2">
+           <widget class="QCheckBox" name="keep_unsmoothed_check">
+            <property name="text">
+             <string>Also keep an unsmoothed copy</string>
+            </property>
+           </widget>
+          </item>
+          <item row="8" column="0">
+           <widget class="QLabel" name="label_mode_caption">
+            <property name="text">
+             <string>Labels:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="8" column="1">
+           <widget class="QComboBox" name="label_mode_combo"/>
+          </item>
+          <item row="9" column="0">
+           <widget class="QLabel" name="label_decimals_caption">
+            <property name="text">
+             <string>Label decimals:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="9" column="1">
+           <widget class="QSpinBox" name="label_decimals_spin">
+            <property name="minimum">
+             <number>0</number>
+            </property>
+            <property name="maximum">
+             <number>6</number>
+            </property>
+            <property name="value">
+             <number>2</number>
+            </property>
+           </widget>
+          </item>
+          <item row="10" column="0">
+           <widget class="QLabel" name="style_caption">
+            <property name="text">
+             <string>Style preset:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="10" column="1">
+           <widget class="QComboBox" name="style_combo"/>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="output_group">
+         <property name="title">
+          <string>Output</string>
+         </property>
+         <layout class="QFormLayout" name="output_layout">
+          <item row="0" column="0">
+           <widget class="QLabel" name="output_mode_caption">
+            <property name="text">
+             <string>Contours:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QComboBox" name="output_mode_combo"/>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="geopackage_caption">
+            <property name="text">
+             <string>GeoPackage:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QgsFileWidget" name="geopackage_file_widget"/>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="output_name_caption">
+            <property name="text">
+             <string>Layer name:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QLineEdit" name="output_name_edit">
+            <property name="placeholderText">
+             <string>Automatic</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0">
+           <widget class="QLabel" name="surface_mode_caption">
+            <property name="text">
+             <string>Interpolated surface:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1">
+           <widget class="QComboBox" name="surface_mode_combo"/>
+          </item>
+          <item row="4" column="0">
+           <widget class="QLabel" name="surface_file_caption">
+            <property name="text">
+             <string>GeoTIFF:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="1">
+           <widget class="QgsFileWidget" name="surface_file_widget"/>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="summary_group">
+         <property name="title">
+          <string>Summary</string>
+         </property>
+         <layout class="QVBoxLayout" name="summary_layout">
+          <item>
+           <widget class="QLabel" name="summary_label">
+            <property name="text">
+             <string notr="true">-</string>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+            <property name="textFormat">
+             <enum>Qt::RichText</enum>
+            </property>
+            <property name="textInteractionFlags">
+             <set>Qt::TextSelectableByMouse</set>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="summary_button_layout">
+            <item>
+             <spacer name="summary_spacer">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item>
+             <widget class="QPushButton" name="refresh_summary_button">
+              <property name="text">
+               <string>Refresh summary</string>
+              </property>
+              <property name="autoDefault">
+               <bool>false</bool>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="scroll_spacer">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>10</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="generate_layout">
+     <item>
+      <widget class="QLabel" name="validation_label">
+       <property name="text">
+        <string notr="true">-</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="generate_button">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>Generate Contours</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="diagnostics_layout">
+     <item>
+      <widget class="QLabel" name="qgis_version_caption">
+       <property name="text">
+        <string>QGIS:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="qgis_version_value">
+       <property name="text">
+        <string notr="true">-</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="plugin_version_caption">
+       <property name="text">
+        <string>Plugin:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="plugin_version_value">
+       <property name="text">
+        <string notr="true">-</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="status_caption">
+       <property name="text">
+        <string>Build:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="status_value">
+       <property name="text">
+        <string notr="true">-</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="diagnostics_spacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="button_box">
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Close</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QgsMapLayerComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qgis.gui</header>
+  </customwidget>
+  <customwidget>
+   <class>QgsFieldComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qgis.gui</header>
+  </customwidget>
+  <customwidget>
+   <class>QgsRasterBandComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qgis.gui</header>
+  </customwidget>
+  <customwidget>
+   <class>QgsExtentWidget</class>
+   <extends>QWidget</extends>
+   <header>qgis.gui</header>
+  </customwidget>
+  <customwidget>
+   <class>QgsFileWidget</class>
+   <extends>QWidget</extends>
+   <header>qgis.gui</header>
+  </customwidget>
+  <customwidget>
+   <class>QgsMessageBar</class>
+   <extends>QFrame</extends>
+   <header>qgis.gui</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>
