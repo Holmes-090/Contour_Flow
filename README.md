@@ -6,6 +6,8 @@ processing tools.
 
 **Point or raster data in → editable contour lines out.** That is all it does.
 
+*Version 0.1.0, first release candidate (experimental). Tested on QGIS 3.44 LTR.*
+
 ![Contour Flow dialog](docs/images/dialog.png)
 ![Groundwater contours from the sample data](docs/images/groundwater_contours.png)
 

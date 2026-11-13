@@ -56,7 +56,7 @@ from ..core.workflow import (
 from ..utils.qgis_helpers import PLUGIN_NAME, log_message, plugin_version
 
 #: Shown in the dialog's diagnostics row.
-BUILD_STATUS = "release candidate"
+BUILD_STATUS = "0.1.0 release candidate"
 
 #: Layer signals that trigger re-validation (point and boundary layers).
 WATCHED_LAYER_SIGNALS = ("selectionChanged", "featureAdded", "featuresDeleted")

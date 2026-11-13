@@ -6,6 +6,49 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.0] - 2026-11-13 (first release candidate)
+
+First public release candidate of **Contour Flow**: point or raster data in,
+editable contour lines out. Experimental. Tested on QGIS 3.44.15 LTR.
+
+### Release notes
+
+- **Point contouring:** contours from any numeric field of a point layer
+  (all or selected features). Data checks cover NULLs, duplicate locations
+  (with an explicit choice for conflicting values), too few or collinear
+  points, and the CRS.
+- **Raster contouring:** contours from any band of a file-based raster/DEM.
+- **Interpolation methods:** QGIS's own TIN Linear, TIN Clough–Tocher and IDW
+  (with power), automatic or manual cell size, and extent modes. A warning
+  appears when values are extrapolated outside the points' convex hull.
+- **Intervals:** an automatic "nice" interval for an approximate contour
+  count, or a fixed interval. Automatic major contours on round numbers.
+- **Clipping:** exact clipping of contour lines to a boundary polygon in any
+  CRS (all or selected polygons; multipart; invalid polygons repaired).
+- **Smoothing:** optional Light/Medium/Custom smoothing that never touches the
+  source values, with an optional unsmoothed copy.
+- **Labels and styles:** native QGIS labels (off, major only, all) and three
+  style presets (Neutral, Topographic, Groundwater), all editable.
+- **Editable outputs:** temporary layers or GeoPackage layers (never
+  overwritten), with fields `value` and `is_major`. Optional interpolated
+  surface as a temporary raster or GeoTIFF. All settings are stored in the
+  layer metadata.
+- **Usability:** a simple default dialog with a collapsed Advanced section,
+  plain-language messages, a live summary, progress with Cancel, and cleanup
+  of partial outputs.
+- **Supported QGIS version:** 3.44 LTR (`qgisMinimumVersion=3.44`,
+  `qgisMaximumVersion=3.99`). QGIS 4 is not yet tested.
+- **Quality:**
+  - 119 unit tests;
+  - 20 real-QGIS integration tests;
+  - an isolated install test of the release ZIP;
+  - fictional sample data with a ready-made project.
+
+Known limitation: processing runs in the QGIS main thread, behind a progress
+dialog with Cancel.
+
 ### Release readiness: simpler UI, sample data, docs
 
 Changed:

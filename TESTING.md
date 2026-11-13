@@ -71,10 +71,10 @@ tests\integration\run_qgis_integration_tests.bat
 
 | Test | Checks |
 |---|---|
-| Algorithms available | All 7 algorithm IDs exist; TIN `METHOD` options are Linear / Clough-Toucher; IDW has `DISTANCE_COEFFICIENT`. |
+| Algorithms available | All 7 algorithm IDs exist; TIN `METHOD` options are Linear / Clough-Toucher (QGIS's own spelling); IDW has `DISTANCE_COEFFICIENT`. |
 | Raster contour | Raw `gdal:contour` gives line geometry and levels 52–68. Through the workflow: the automatic interval is 2, fields are `value` and `is_major`, geometries are valid, and line positions are correct to 1e-5 m. |
 | TIN Linear | Plan: 7 usable points, the duplicate/conflict/NULL warnings, interval 0.5, cell 0.2. The surface stays within 100–104. All contour vertices lie on the fixture plane (within 0.01). |
-| TIN Clough-Toucher | Runs, values are multiples of the interval, it reproduces the planar data, and the metadata names the method. |
+| TIN Clough-Tocher | Runs, values are multiples of the interval, it reproduces the planar data, and the metadata names the method. |
 | IDW | Runs; power 2 and power 5 give different surfaces; the power is recorded in metadata. |
 | Boundary clipping + CRS transform | WGS84 boundary over UTM points: every line is inside the boundary, valid, and ends on its edge. The multipart + invalid boundary is repaired and reported. Selected-feature-only mode clips to that feature only. |
 | Raster + boundary clipping | Crop → contour → exact clip. Lines are inside the boundary, and the levels next to the edge are kept (51–58). |
