@@ -196,7 +196,7 @@ def validate_zip(path, version):
 INSTALL_TEST = r'''
 import faulthandler, json, os, sys
 faulthandler.enable()
-zip_path, root, repo = sys.argv[1], sys.argv[2], sys.argv[3]
+zip_path, root, repo, expected_version, expected_email = sys.argv[1:6]
 profile = os.path.join(root, "profile")
 plugins = os.path.join(profile, "python", "plugins")
 os.makedirs(plugins, exist_ok=True)
@@ -246,6 +246,12 @@ sys.path.insert(0, plugins)
 qgis.utils.updateAvailablePlugins()
 ok("QGIS discovers the plugin", "contour_flow" in qgis.utils.available_plugins)
 ok("metadata name is 'Contour Flow'", qgis.utils.pluginMetadata("contour_flow", "name") == "Contour Flow")
+ok(f"loaded plugin reports version {expected_version}",
+   qgis.utils.pluginMetadata("contour_flow", "version") == expected_version)
+ok(f"packaged metadata has support email {expected_email}",
+   qgis.utils.pluginMetadata("contour_flow", "email") == expected_email)
+log = []
+QgsApplication.messageLog().messageReceived.connect(lambda message, tag, level: log.append((tag, level, message)))
 ok("plugin loads", qgis.utils.loadPlugin("contour_flow"))
 ok("plugin starts (enabled)", qgis.utils.startPlugin("contour_flow"))
 import contour_flow
@@ -272,6 +278,15 @@ before = set(project.mapLayers())
 dialog.generate_button.click()
 added = [project.mapLayer(i) for i in set(project.mapLayers()) - before]
 ok("sample points generate contours", len(added) == 1 and added[0].featureCount() > 0)
+point_contours = added[0] if added else None
+if point_contours is not None:  # output must be an ordinary editable layer
+    feature = next(point_contours.getFeatures())
+    geometry = feature.geometry()
+    geometry.translate(1.0, 1.0)
+    editable = (point_contours.startEditing() and point_contours.changeGeometry(feature.id(), geometry)
+                and point_contours.changeAttributeValue(feature.id(), point_contours.fields().indexOf("is_major"), 1)
+                and point_contours.commitChanges())
+    ok("output layer is editable (geometry + attribute edit committed)", bool(editable))
 
 dialog.raster_mode_radio.setChecked(True)
 dialog.raster_layer_combo.setLayer(layers["sample_dem"])
@@ -286,13 +301,17 @@ ok("no toolbar/menu left after unload", not iface.toolbar.actions() and iface.su
 project.clear()
 for _ in range(3):
     QgsApplication.processEvents()
+errors = [m for tag, level, m in log if level == Qgis.MessageLevel.Critical or "Traceback" in m]
+ok("no critical messages or tracebacks in the QGIS log", not errors)
+for message in errors[:5]:
+    print("  LOG: " + message[:300], flush=True)
 failed = [k for k, v in results.items() if not v]
 print(json.dumps({"passed": len(results) - len(failed), "failed": failed}), flush=True)
 os._exit(1 if failed else 0)
 '''
 
 
-def install_test(zip_path):
+def install_test(zip_path, meta):
     step("4. Isolated install test (temporary QGIS profile)")
     import importlib.util
 
@@ -305,11 +324,15 @@ def install_test(zip_path):
         handle.write(INSTALL_TEST)
     env = dict(os.environ, QT_QPA_PLATFORM="offscreen", PYTHONUNBUFFERED="1")
     try:
-        result = subprocess.run([sys.executable, script, zip_path, root, REPO], cwd=root, env=env,
+        result = subprocess.run([sys.executable, script, zip_path, root, REPO, meta["version"], meta["email"]],
+                                cwd=root, env=env,
                                 capture_output=True, text=True, timeout=600)
         lines = [line for line in result.stdout.splitlines() if line.startswith(("PASS", "FAIL", "{"))]
         for line in lines:
             print("  " + line)
+        if "Traceback" in result.stderr or "Traceback" in result.stdout:
+            print(result.stderr[-3000:])
+            raise PackagingError("a Python traceback appeared during the isolated install test")
         if result.returncode != 0:
             print(result.stderr[-3000:])
             raise PackagingError(f"isolated install test failed (exit code {result.returncode})")
@@ -329,7 +352,7 @@ def main():
         meta, blockers = fast_checks(not args.no_tests)
         zip_path = build_zip(args.output, meta["version"])
         validate_zip(zip_path, meta["version"])
-        installed = None if args.no_install_test else install_test(zip_path)
+        installed = None if args.no_install_test else install_test(zip_path, meta)
     except PackagingError as exc:
         print(f"\nPACKAGING FAILED: {exc}")
         return 1
