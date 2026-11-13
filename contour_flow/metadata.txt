@@ -1,31 +1,31 @@
 ; QGIS plugin metadata for Contour Flow.
 ; Field reference: PyQGIS Developer Cookbook, "Writing a Python Plugin" > metadata.txt
 ; Publishing rules: https://plugins.qgis.org/docs/publish
-;
-; DEVELOPMENT DRAFT (experimental, not yet released).
-; Every value marked TODO must be replaced before any public release.
 
 [general]
 ; Required fields
 name=Contour Flow
 qgisMinimumVersion=3.44
 description=Generates editable contour lines from point elevations and raster surfaces using native QGIS and GDAL processing tools.
-about=Contour Flow is an open-source, single-purpose QGIS plugin for making editable vector contour lines. It interpolates a numeric field of a point layer (for example groundwater elevation, ground elevation, bedrock elevation or survey elevation) with the built-in QGIS TIN or IDW algorithms, or contours an existing raster/DEM directly with GDAL. Options include extent modes, exact boundary clipping, automatic or fixed intervals, major/minor classification, smoothing, labels, style presets and temporary or GeoPackage output. Processing settings are stored in the layer metadata. Interpolated contours are estimates and require professional review. EARLY DEVELOPMENT BUILD. It has no external dependencies beyond QGIS.
+about=Contour Flow is an open-source, single-purpose QGIS plugin: point or raster data in, editable contour lines out. It interpolates a numeric field of a point layer (for example groundwater, ground-surface, bedrock or survey elevations) with QGIS's own TIN Linear, TIN Clough-Tocher or IDW algorithms, or contours an existing raster/DEM with GDAL. It offers automatic or fixed intervals, exact clipping to a boundary polygon, optional smoothing, major/minor contours, labels and style presets, and writes temporary layers or GeoPackage layers (plus an optional GeoTIFF surface). All settings are stored in the output layer's metadata. Interpolated contours are estimates derived from the supplied data; results should be reviewed by an appropriately qualified user before technical or professional use. No dependencies beyond QGIS and its Processing plugin.
 version=0.0.2
-; TODO: replace with the author's real name and a contact address before release.
-author=TODO Author Name
-email=todo@example.com
-; TODO: confirm the public repository (suggested name: Contour-Flow-QGIS) and update these URLs.
-repository=https://github.com/TODO/qgis-contour-generator
+author=Michael Holmes
+; TODO (release blocker): a public contact email is required by the QGIS plugin repository.
+; It is shown to logged-in users on plugins.qgis.org and in the Plugin Manager after installation.
+email=TODO-contact-email@example.com
+repository=https://github.com/Holmes-090/Contour_Flow
 
 ; Optional fields
-qgisMaximumVersion=4.99
-homepage=https://github.com/TODO/qgis-contour-generator
-tracker=https://github.com/TODO/qgis-contour-generator/issues
+; Tested on QGIS 3.44 LTR only; QGIS 4 is not claimed until it has been tested.
+qgisMaximumVersion=3.99
+homepage=https://github.com/Holmes-090/Contour_Flow
+tracker=https://github.com/Holmes-090/Contour_Flow/issues
+icon=icons/contour_flow.png
 category=Raster
-tags=contour,contours,isolines,interpolation,tin,idw,dem,elevation,groundwater,hydrogeology,survey
+tags=contour,contours,contour lines,isolines,interpolation,tin,idw,dem,elevation,groundwater,hydrogeology,survey
 experimental=True
 deprecated=False
+hasProcessingProvider=no
 changelog=
     0.0.2 - Renamed to Contour Flow (package contour_flow); verified against real QGIS 3.44 / GDAL with automated integration tests.
     0.0.1 - Development build: core contour engine plus professional controls (IDW, extent modes, clipping, smoothing, major/minor, labels, styles, GeoPackage output).

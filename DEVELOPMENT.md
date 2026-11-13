@@ -451,29 +451,53 @@ the hull. IDW computes a weighted mean everywhere, so it produces values far
 from any data. That is why the plugin measures how much of the processing area
 lies outside the hull, and warns (IMPORTANT for IDW).
 
-## How ZIP installation (future releases) differs
+## Release packaging
 
-For users, the plugin will be delivered as a ZIP file containing a **single
-top-level folder**:
-
-```
-contour_flow.zip
-└── contour_flow/
-    ├── __init__.py
-    ├── metadata.txt
-    ├── LICENSE
-    └── ...
+```bat
+scripts\run_with_qgis.bat scripts\package_plugin.py
 ```
 
-- Installed through **Plugins ▸ Manage and Install Plugins ▸ Install from ZIP**,
-  or automatically from plugins.qgis.org.
-- QGIS **copies** the files into the profile `plugins` folder. Later edits in
-  this repository do not affect an installed ZIP copy.
-- The ZIP must not contain `tests/`, `.git/`, `__pycache__/`, generated files,
-  or binaries. Keeping the plugin in its own subfolder makes this simple.
-- **Before installing a ZIP for testing, remove the development junction**
-  (see the warning above). Otherwise the ZIP install would write into, or
-  replace, your source folder.
+This produces `dist\contour-flow-<version>.zip` (`dist/` is ignored by Git).
+The script stops with exit code 1 if any step fails:
 
-No packaging script is needed yet. One will be added in the release phase
-if the manual steps prove error-prone.
+1. **Fast checks:**
+   - byte-compiles every plugin module and runs the unit tests;
+   - checks `metadata.txt`: required fields, a PNG/JPEG icon present;
+   - reports placeholder values (e.g. a TODO email) as **release blockers**.
+2. **Build:** exactly one top-level folder `contour_flow/`, holding only
+   plugin files (code, `.ui`, icons, `metadata.txt`, `LICENSE`). No tests,
+   sample data, caches, VCS or IDE files.
+3. **Validate:**
+   - every required file is present and nothing forbidden is included;
+   - one top-level folder;
+   - the ZIP's metadata version matches;
+   - the icon referenced in `metadata.txt` exists;
+   - the ZIP is under 25 MB.
+4. **Isolated install test:** a separate QGIS process with a **temporary
+   profile folder** (`QgsApplication(..., profileFolder)`):
+   - extracts the ZIP with the Plugin Manager's own `pyplugin_installer.unzip`
+     into that profile's plugin folder;
+   - discovers, loads and starts the plugin with `qgis.utils`, and checks
+     that the code comes from the ZIP, not the repository;
+   - checks the toolbar and menu, opens the dialog, generates contours from
+     the sample points and the sample DEM, and unloads the plugin;
+   - deletes the temporary profile afterwards. Your own QGIS profile is
+     never used.
+
+Options: `--no-tests`, `--no-install-test`, `--output DIR`. `tests/test_packaging.py`
+unit-tests the build and validation rules (e.g. that a stray `__pycache__` or a
+missing `LICENSE` fails validation).
+
+### Installing a release ZIP by hand
+
+**Plugins ▸ Manage and Install Plugins ▸ Install from ZIP**. QGIS copies the
+files into the profile's `plugins` folder; later edits in this repository do
+not affect that copy.
+
+**Remove the development junction first** (`cmd /c rmdir` on the link, see
+above). Otherwise the install writes into, or replaces, your working copy.
+
+### Publishing (not done yet)
+
+Upload the ZIP at <https://plugins.qgis.org> (**My plugins ▸ Upload**), with
+an OSGeo account. Resolve the release blockers reported by the script first.
