@@ -26,7 +26,6 @@ from qgis.core import (
     Qgis,
     QgsProcessingContext,
     QgsProcessingFeedback,
-    QgsProcessingMultiStepFeedback,
     QgsProject,
     QgsRasterLayer,
 )
@@ -53,7 +52,7 @@ from .input_validation import (
     raster_range_problem,
 )
 from .interpolation import build_point_layer, read_point_samples, run_interpolation
-from .intervals import INTERVAL_AUTO, level_count, resolve_interval
+from .intervals import INTERVAL_AUTO, auto_major_every, level_count, resolve_interval
 from .options import (
     BOUNDARY_ALL,
     BOUNDARY_SELECTED,
@@ -64,7 +63,7 @@ from .options import (
     LABEL_LABELS,
     LABELS_MAJOR,
     LABELS_NONE,
-    MAJOR_EVERY_DEFAULT,
+    MAJOR_EVERY_AUTO,
     METHOD_IDW,
     METHOD_LABELS,
     METHOD_TIN_LINEAR,
@@ -132,7 +131,7 @@ class ContourRequest:
     interval_mode: str = INTERVAL_AUTO
     target_count: int = 10
     fixed_interval: float = 1.0
-    major_every: int = MAJOR_EVERY_DEFAULT
+    major_every: int = MAJOR_EVERY_AUTO  # 0 = automatic
     smoothing_mode: str = SMOOTH_NONE
     smooth_iterations: int = 1
     smooth_offset: float = 0.25
@@ -166,34 +165,53 @@ class ContourPlan:
     extent: object = None  # QgsRectangle, processing CRS
     clip_polygon: object = None  # QgsGeometry or None
     smoothing: tuple = None  # (iterations, offset) or None
+    major_every: int = None  # resolved (automatic or chosen)
 
     @property
     def ok(self):
         return not self.errors
 
     def summary_lines(self):
-        """Short preview lines for the dialog (no settings echo)."""
+        """Concise preview lines for the dialog; only applicable fields."""
         r = self.request
+        points = r.source_type == SOURCE_POINTS
         lines = []
-        if r.source_type == SOURCE_POINTS and self.samples is not None:
+        if points and self.samples is not None:
             usable = len(self.samples.points)
-            lines.append(f"Points: {usable} usable, {self.raw_count - usable} skipped or merged")
-        elif r.source_type == SOURCE_RASTER and r.raster_layer is not None:
-            lines.append(f"Raster band: {r.raster_band}")
+            lines.append(f"Usable points: {usable}")
+            if self.raw_count > usable:
+                lines.append(f"Skipped or merged: {self.raw_count - usable}")
+        elif not points and r.raster_layer is not None:
+            lines.append(f"Band: {r.raster_band}")
         if self.value_min is not None:
-            lines.append(f"Range: {self.value_min:g} to {self.value_max:g}")
-        if r.source_type == SOURCE_POINTS and self.cell_size is not None:
+            decimals = 2 if self.value_max - self.value_min >= 1 else 4
+            lines.append(f"Range: {self.value_min:.{decimals}f} – {self.value_max:.{decimals}f}")
+        if points and self.cell_size is not None:
             method = METHOD_LABELS.get(r.method, r.method)
             if r.method == METHOD_IDW:
-                method += f", power {r.idw_power:g}"
+                method += f" (power {r.idw_power:g})"
             lines.append(f"Method: {method}")
-            lines.append(f"Cell size: {self.cell_size:g}{' (automatic)' if self.cell_size_auto else ''}")
-            lines.append(f"Extent: {EXTENT_LABELS.get(r.extent_mode, r.extent_mode)}")
+            lines.append(f"Cell size: {self.cell_size:g}{_unit_suffix(self.crs)}"
+                         f"{' (automatic)' if self.cell_size_auto else ''}")
+            if r.extent_mode != EXTENT_POINTS:
+                lines.append(f"Extent: {EXTENT_LABELS.get(r.extent_mode, r.extent_mode)}")
         if r.boundary_layer is not None:
             lines.append(f"Clipped to: {r.boundary_layer.name()}")
         if self.interval is not None:
-            lines.append(f"Interval: {self.interval:g}, about {self.levels} contour level(s)")
+            lines.append(f"Contour interval: {self.interval:g}")
+            lines.append(f"Estimated levels: {self.levels}")
         return lines
+
+
+def _unit_suffix(crs):
+    """' m', ' ft', ' deg'... for the CRS's map units ('' if unknown)."""
+    try:
+        from qgis.core import QgsUnitTypes
+
+        text = QgsUnitTypes.toAbbreviatedString(crs.mapUnits())
+        return f" {text}" if text else ""
+    except Exception:  # noqa: BLE001 - cosmetic only
+        return ""
 
 
 def _current_is_canceled(feedback):
@@ -259,6 +277,7 @@ def _set_interval(plan):
         plan.errors.append(problem)
         return
     plan.levels = level_count(plan.value_min, plan.value_max, plan.interval)
+    plan.major_every = r.major_every or auto_major_every(plan.interval)
     needed = suggested_label_precision(plan.interval)
     if r.label_mode != LABELS_NONE and r.label_decimals < needed:
         plan.warnings.append(
@@ -449,7 +468,11 @@ def metadata_items(plan, output_description):
             f"automatic (about {r.target_count} contours)" if r.interval_mode == INTERVAL_AUTO else "fixed",
         ),
         ("Contour levels", plan.levels),
-        ("Major contour every", f"{r.major_every} intervals ({plan.interval * r.major_every:g})"),
+        (
+            "Major contour every",
+            f"{plan.major_every} intervals ({plan.interval * plan.major_every:g})"
+            + (" (automatic)" if r.major_every == MAJOR_EVERY_AUTO else ""),
+        ),
         (
             "Smoothing",
             SMOOTH_LABELS[r.smoothing_mode]
@@ -568,13 +591,18 @@ def _execute(plan, project, feedback, on_stage, written):
     warnings = list(plan.warnings)
     steps = _steps(plan)
     keys = [key for key, _ in steps]
-    child = QgsProcessingMultiStepFeedback(len(steps), feedback)
+    # Algorithms get the caller's feedback directly. QgsProcessingMultiStepFeedback
+    # is deliberately NOT used: on QGIS 3.44.15, running algorithms through it
+    # led to an access violation on the next event-loop pass after the run
+    # (found by the real-QGIS tests). Overall progress is combined by the
+    # caller from on_stage(index, count) and the per-algorithm progress.
+    child = feedback
     context = QgsProcessingContext()
     context.setProject(project)
 
     def stage(key):
         index = keys.index(key)
-        child.setCurrentStep(index)
+        feedback.setProgress(0)
         if on_stage:
             on_stage(steps[index][1], index, len(steps))
         if feedback.isCanceled():
@@ -611,7 +639,7 @@ def _execute(plan, project, feedback, on_stage, written):
     stage("contour")
     contour_path = run_contour(contour_input, band, plan.interval, context, child)
     stage("prepare")
-    lines = editable_copy(contour_path, "contours", plan.crs, plan.interval, r.major_every)
+    lines = editable_copy(contour_path, "contours", plan.crs, plan.interval, plan.major_every)
     if plan.clip_polygon is not None:
         stage("clip")
         lines = clip_lines(lines, plan.clip_polygon, plan.crs, context, child)

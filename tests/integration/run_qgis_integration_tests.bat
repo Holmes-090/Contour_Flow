@@ -28,5 +28,8 @@ if not exist "%QGIS_PY%" (
 )
 echo Using QGIS at %QGIS_ROOT%
 set QT_QPA_PLATFORM=offscreen
+rem Unbuffered output, so a crash inside QGIS cannot swallow the report.
+set PYTHONUNBUFFERED=1
+set PYTHONFAULTHANDLER=1
 call "%QGIS_PY%" "%~dp0run_qgis_integration_tests.py" %*
 exit /b %ERRORLEVEL%

@@ -132,6 +132,8 @@ def _boundary_multi_layer():
 def _write_raster(path):
     from osgeo import gdal, osr
 
+    gdal.DontUseExceptions()  # explicit default; global exception mode can break QGIS code
+
     driver = gdal.GetDriverByName("GTiff")
     dataset = driver.Create(path, RASTER_COLUMNS, RASTER_ROWS, 1, gdal.GDT_Float32)
     dataset.SetGeoTransform((X0, RASTER_CELL, 0.0, Y0 + RASTER_ROWS * RASTER_CELL, 0.0, -RASTER_CELL))

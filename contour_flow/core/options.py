@@ -13,12 +13,20 @@ import re
 # ------------------------------------------------------------ interpolation
 
 METHOD_TIN_LINEAR = "tin_linear"
-METHOD_TIN_CLOUGH_TOCHER = "tin_clough_toucher"
+METHOD_TIN_CLOUGH_TOCHER = "tin_clough_tocher"
 METHOD_IDW = "idw"
 METHOD_LABELS = {
-    METHOD_TIN_LINEAR: "TIN, linear",
-    METHOD_TIN_CLOUGH_TOCHER: "TIN, Clough-Toucher (cubic)",
-    METHOD_IDW: "IDW (inverse distance weighting)",
+    METHOD_TIN_LINEAR: "TIN Linear",
+    METHOD_TIN_CLOUGH_TOCHER: "TIN Clough–Tocher",
+    METHOD_IDW: "IDW",
+}
+METHOD_TOOLTIPS = {
+    METHOD_TIN_LINEAR: "Triangulates the points and interpolates linearly within each triangle "
+    "(piecewise-linear surface). No values outside the points' convex hull.",
+    METHOD_TIN_CLOUGH_TOCHER: "Smoother (cubic) surface on the same triangulation as TIN Linear. "
+    "May slightly over- or undershoot the data.",
+    METHOD_IDW: "Inverse distance weighting: nearby points have more influence. Fills the whole extent, "
+    "so review results outside the measured area carefully.",
 }
 
 #: IDW distance coefficient (power). QGIS accepts 0 to 99.99.
@@ -82,7 +90,7 @@ def boundary_problem(has_boundary, feature_mode, selected_count):
     if not has_boundary:
         return None
     if feature_mode == BOUNDARY_SELECTED and selected_count == 0:
-        return "No features are selected in the boundary layer."
+        return "Select one or more boundary polygons in QGIS, or set Boundary features to All (Advanced settings)."
     return None
 
 
@@ -122,11 +130,15 @@ def smoothing_parameters(mode, iterations=1, offset=0.25):
 
 # ------------------------------------------------------- major/labels/style
 
+#: 0 = automatic (see intervals.auto_major_every).
+MAJOR_EVERY_AUTO = 0
 MAJOR_EVERY_DEFAULT = 5
 MAJOR_EVERY_MAX = 1000
 
 
 def major_every_problem(major_every):
+    if major_every == MAJOR_EVERY_AUTO:
+        return None
     if not (isinstance(major_every, int) and 1 <= major_every <= MAJOR_EVERY_MAX):
         return f"'Major contour every' must be a whole number from 1 to {MAJOR_EVERY_MAX}."
     return None
@@ -136,9 +148,9 @@ LABELS_NONE = "none"
 LABELS_MAJOR = "major"
 LABELS_ALL = "all"
 LABEL_LABELS = {
-    LABELS_NONE: "No labels",
-    LABELS_MAJOR: "Major contours only",
-    LABELS_ALL: "All contours",
+    LABELS_NONE: "Off",
+    LABELS_MAJOR: "Major only",
+    LABELS_ALL: "All",
 }
 LABEL_PRECISION_MAX = 6
 
@@ -162,9 +174,9 @@ STYLE_TOPOGRAPHIC = "topographic"
 STYLE_GROUNDWATER = "groundwater"
 #: Line colours and widths (millimetres) for the presets.
 STYLE_PRESETS = {
-    STYLE_NEUTRAL: {"label": "Neutral (black)", "color": "#000000"},
-    STYLE_TOPOGRAPHIC: {"label": "Topographic (brown)", "color": "#8c5a2b"},
-    STYLE_GROUNDWATER: {"label": "Groundwater (blue)", "color": "#1f5fbf"},
+    STYLE_NEUTRAL: {"label": "Neutral", "color": "#000000"},
+    STYLE_TOPOGRAPHIC: {"label": "Topographic", "color": "#8c5a2b"},
+    STYLE_GROUNDWATER: {"label": "Groundwater", "color": "#1f5fbf"},
 }
 MINOR_LINE_WIDTH_MM = 0.25
 MAJOR_LINE_WIDTH_MM = 0.6

@@ -356,6 +356,32 @@ covers. How it works:
   `reload()`ed, otherwise GDAL prints "unable to open database file" on the
   next feature count.
 
+- **Do not use `QgsProcessingMultiStepFeedback`** for these algorithm runs.
+  On 3.44.15, running `gdal:contour` through it led to an **access violation
+  on the next event-loop pass** after the feedback objects were freed, or when
+  layers were later deleted (for example by opening another project). The
+  real-QGIS suite has a regression test for this ("Desktop sequence").
+- **Never call `gdal.UseExceptions()` globally** inside a QGIS process (e.g.
+  in fixtures or plugin code). It changes GDAL's error mode for all of QGIS's
+  Python code, and here it crashed the test process. Scripts call
+  `gdal.DontUseExceptions()` explicitly instead, which keeps the default and
+  silences GDAL's FutureWarning.
+- **Headless rendering needs fonts:** Qt's `offscreen` platform renders no
+  text unless `QT_QPA_FONTDIR` points at a font folder.
+  `scripts/capture_screenshots.py` sets it to `%WINDIR%\Fonts`.
+
+## Helper scripts (`scripts/`)
+
+All of them run with QGIS's Python through `scripts\run_with_qgis.bat`,
+which finds QGIS like the test wrapper does.
+
+| Script | Purpose |
+|---|---|
+| `make_sample_data.py` | Regenerates `sample_data/` (GeoPackage, DEM, QGIS project) from formulas |
+| `render_icon.py` | Renders `contour_flow/icons/contour_flow.svg` to the 64 px PNG used by `metadata.txt` |
+| `capture_screenshots.py` | Renders the README screenshots in `docs/images/` with real QGIS (the dialog via Qt, the maps via the QGIS map renderer) |
+| `package_plugin.py` | Builds, validates and test-installs the release ZIP (see below) |
+
 ### After the rename from `contour_generator`
 
 The development link in the QGIS profile must point at `contour_flow`:
@@ -396,11 +422,13 @@ How a run is wired:
   QGIS exits. The contours are always copied into memory layers, or written to
   the GeoPackage. The *temporary* surface option depends on its temp file;
   choose GeoTIFF to keep it.
-- **Progress and Cancel:** a `QgsProcessingMultiStepFeedback` maps each stage
-  onto the overall progress. The dialog's `QProgressDialog` is
-  application-modal, so QGIS keeps repainting and Cancel works, but the user
-  cannot start other work during the run. Algorithms check
-  `feedback.isCanceled()` themselves, and the workflow also checks between stages.
+- **Progress and Cancel:** algorithms receive the caller's
+  `QgsProcessingFeedback` directly. The dialog combines "stage *i* of *n*"
+  (from the workflow's `on_stage` callback) with each algorithm's own
+  progress into one bar. Its `QProgressDialog` is application-modal, so QGIS
+  keeps repainting and Cancel works, but the user cannot start other work
+  during the run. Algorithms check `feedback.isCanceled()` themselves, and
+  the workflow also checks between stages.
 - When an algorithm fails, the parameters and the Processing log are written to
   **Log Messages ▸ Contour Flow**, and the *Processing* tab shows the GDAL
   command line.

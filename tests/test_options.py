@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 from contour_flow.core import options as o
-from contour_flow.core.intervals import is_major_level
+from contour_flow.core.intervals import auto_major_every, is_major_level
 from contour_flow.core.report import (
     DISCLAIMER,
     format_value,
@@ -64,7 +64,7 @@ class BoundaryTests(unittest.TestCase):
         self.assertIsNone(o.boundary_problem(False, o.BOUNDARY_SELECTED, 0))
 
     def test_selected_without_selection(self):
-        self.assertIn("No features are selected", o.boundary_problem(True, o.BOUNDARY_SELECTED, 0))
+        self.assertIn("Select one or more boundary polygons", o.boundary_problem(True, o.BOUNDARY_SELECTED, 0))
 
     def test_selected_with_selection(self):
         self.assertIsNone(o.boundary_problem(True, o.BOUNDARY_SELECTED, 2))
@@ -109,8 +109,21 @@ class MajorAndLabelTests(unittest.TestCase):
     def test_major_invalid(self):
         with self.assertRaises(ValueError):
             is_major_level(1, 0, 4)
-        self.assertIsNotNone(o.major_every_problem(0))
+        self.assertIsNone(o.major_every_problem(o.MAJOR_EVERY_AUTO))  # 0 = automatic
+        self.assertIsNotNone(o.major_every_problem(-1))
+        self.assertIsNotNone(o.major_every_problem(2.5))
         self.assertIsNone(o.major_every_problem(5))
+
+    def test_auto_major_every_gives_round_majors(self):
+        for interval, every, major in [(0.25, 4, 1.0), (0.5, 2, 1.0), (1, 5, 5), (2, 5, 10), (2.5, 4, 10),
+                                       (5, 2, 10), (0.1, 5, 0.5), (20, 5, 100), (0.05, 2, 0.1)]:
+            self.assertEqual(auto_major_every(interval), every, interval)
+            self.assertAlmostEqual(interval * auto_major_every(interval), major)
+
+    def test_auto_major_every_unusual_interval(self):
+        self.assertEqual(auto_major_every(0.3), 5)
+        with self.assertRaises(ValueError):
+            auto_major_every(0)
 
     def test_label_precision(self):
         self.assertIsNone(o.label_precision_problem(0))

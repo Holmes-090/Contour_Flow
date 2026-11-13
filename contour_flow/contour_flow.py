@@ -33,7 +33,7 @@ class ContourFlowPlugin:
 
     def initGui(self):  # noqa: N802 - name is required by QGIS
         """Called by QGIS when the plugin is enabled (or reloaded)."""
-        icon = QIcon(os.path.join(self.plugin_dir, "icons", "contour.svg"))
+        icon = QIcon(os.path.join(self.plugin_dir, "icons", "contour_flow.svg"))
         self.action = QAction(icon, PLUGIN_NAME, self.iface.mainWindow())
         self.action.setObjectName("contourFlowAction")
         self.action.setToolTip(PLUGIN_NAME)

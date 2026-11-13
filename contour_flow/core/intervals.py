@@ -54,6 +54,22 @@ def nice_interval(vmin, vmax, target_count):
     )
 
 
+#: Automatic major frequency per interval mantissa, so majors land on 1, 10, 100... multiples:
+#: 1 -> every 5 (5), 2 -> every 5 (10), 2.5 -> every 4 (10), 5 -> every 2 (10).
+AUTO_MAJOR_EVERY = {1.0: 5, 2.0: 5, 2.5: 4, 5.0: 2}
+
+
+def auto_major_every(interval):
+    """Major-contour frequency that puts major contours on round numbers."""
+    if not interval > 0:
+        raise ValueError("Interval must be positive.")
+    mantissa = interval / 10 ** math.floor(math.log10(interval) + 1e-12)
+    for key, every in AUTO_MAJOR_EVERY.items():
+        if abs(mantissa - key) < 1e-9:
+            return every
+    return 5
+
+
 def is_major_level(value, interval, major_every):
     """True if ``value`` is every ``major_every``-th multiple of ``interval``.
 

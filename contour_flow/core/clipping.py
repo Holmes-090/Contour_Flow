@@ -51,7 +51,7 @@ def clip_lines(lines, polygon, crs, context, feedback):
 
 
 def crop_raster(raster, rectangle, context, feedback):
-    """Crop ``raster`` (layer, raster CRS) to ``rectangle``. Returns a file path."""
+    """Crop ``raster`` (layer or source, raster CRS) to ``rectangle``. Returns a file path."""
     extent = f"{rectangle.xMinimum()},{rectangle.xMaximum()},{rectangle.yMinimum()},{rectangle.yMaximum()}"
     result = run_algorithm(
         CROP_RASTER_ALGORITHM,

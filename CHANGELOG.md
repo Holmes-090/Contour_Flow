@@ -6,6 +6,65 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Release readiness: simpler UI, sample data, docs
+
+Changed:
+
+- **Simplified dialog.** The default view shows only Input (source, layer,
+  value field, features), Boundary, Contours (interval, count or fixed
+  value, labels, style), Output (temporary or GeoPackage), Summary and
+  **Generate Contours**. Everything technical moved to a collapsed
+  **Advanced settings** section: interpolation method, IDW power, cell size,
+  extent, hull buffer, custom extent, duplicate handling, boundary features,
+  major frequency, label decimals, smoothing and surface output.
+- **Cell size:** an *Automatic cell size* checkbox. The number field is
+  editable only when the box is unticked, and starts from the automatic value.
+- **Major contours:** *Automatic major contours* (default) puts majors on
+  round numbers: every 4 for interval 0.25, every 2 for 0.5, every 5 for 1 or 2.
+- **Plain-language guidance:**
+  - "Add a point layer with a numeric elevation field, or add an elevation raster."
+  - "The selected point layer has no numeric fields available for contouring."
+  - "Select one or more point features in QGIS, or switch to All features."
+
+  With only rasters in the project, the dialog starts in Raster mode. The band
+  row appears only for multi-band rasters.
+- **Concise summary:** usable points, range, method, cell size with units,
+  contour interval and estimated levels. Only applicable lines are shown.
+- **Tooltips** on technical controls: methods, cell size, extent, smoothing,
+  automatic interval.
+- Display names: "TIN Linear", "TIN Clough–Tocher" (the spelling was
+  previously wrong), "IDW"; labels Off / Major only / All; styles Neutral /
+  Topographic / Groundwater.
+- **New plugin icon** `icons/contour_flow.svg`, plus a 64 px PNG for
+  `metadata.txt`.
+
+Added:
+
+- `sample_data/`: fictional `contour_flow_sample.gpkg` (`sample_wells` with
+  `gw_elev`, `ground_elev`, `bedrock_elev`; `site_boundary`),
+  `sample_dem.tif`, a ready-made project `contour_flow_sample.qgz`, and a
+  README with three tests. `scripts/make_sample_data.py` regenerates it all.
+- `docs/images/`: README screenshots rendered by real QGIS
+  (`scripts/capture_screenshots.py`).
+- `scripts/run_with_qgis.bat`: runs any script with QGIS's Python.
+- Integration tests:
+  - the dialog's first-run messages, Advanced collapse and dependent controls;
+  - the sample-data README tests;
+  - a desktop "contour, then reopen project" regression;
+
+  20 in total.
+
+Fixed (found by the new tests):
+
+- **Crash after contouring (desktop-relevant):** algorithms were run through
+  `QgsProcessingMultiStepFeedback`. On QGIS 3.44.15 this led to an access
+  violation on the next event-loop pass, or when layers were deleted, e.g.
+  when opening another project after contouring a DEM. Algorithms now get
+  the caller's feedback directly, and the dialog computes overall progress
+  itself.
+- Fixtures and scripts no longer call `gdal.UseExceptions()`, which crashed
+  the QGIS test process.
+
 ### Real-QGIS integration testing (QGIS 3.44.15, GDAL 3.13.3)
 
 Added:

@@ -29,7 +29,7 @@ From the repository root, with any Python 3.9+ (no QGIS needed):
 python -m unittest discover -s tests -t .
 ```
 
-111 tests cover `core/options.py`, `core/input_validation.py`,
+113 tests cover `core/options.py`, `core/input_validation.py`,
 `core/intervals.py`, `core/grid.py` and `core/report.py`.
 
 ## Level 2: real-QGIS integration tests
@@ -87,6 +87,9 @@ tests\integration\run_qgis_integration_tests.bat
 | Cancellation + cleanup | Cancelling after the GeoTIFF was written removes it, and no GeoPackage is left behind. |
 | Styling and labels | For each preset: categorized renderer on `is_major`, widths 0.25 / 0.6 mm, preset colour, label field `value`, decimals, curved placement, and the major-only rule filter. |
 | Plugin load + dialog | `classFactory`, toolbar and menu action, icon. The dialog with real QGIS widgets filters layers and fields correctly; **Generate** through the dialog adds the layer and restores the cursor; unload and two reload cycles leave nothing behind. |
+| Dialog: simple view, Advanced, first-run messages | Empty project shows the "add a point layer or raster" message; a raster-only project starts in Raster mode; a point layer without numeric fields is explained; Advanced is collapsed by default; dependent controls enable/disable correctly (IDW power, manual cell size, hull buffer, custom extent, custom smoothing, major frequency, boundary options); the request carries the Advanced values; the summary shows the concise fields. |
+| Sample data (README tests) | The three `sample_data/README.md` tests plus bedrock: sensible level counts, everything inside the site boundary, majors on whole metres, NULL bedrock reported; the DEM test; the sample project opens with the right layer order. |
+| Desktop sequence: contour project layers, reopen project | Regression for a crash found in this milestone: open the sample project, contour its raster and points, add the results, pump the event loop, reopen the project. Three rounds. |
 | Plugin discovery from QGIS profile | QGIS's own plugin scanner finds "Contour Flow" through the development link. Skipped if the link doesn't exist. |
 
 ### Reading a failure
@@ -102,32 +105,41 @@ QGIS log:
 `Check:` lines are failed expectations. Other exception types are shown with
 a traceback.
 
+## Package test (release ZIP)
+
+```bat
+scripts\run_with_qgis.bat scripts\package_plugin.py
+```
+
+Builds `dist/contour-flow-<version>.zip` and validates its contents. It then
+installs the ZIP into a temporary, isolated QGIS profile (never your own) and
+uses QGIS's plugin loader there: discovery, enable, toolbar and menu, dialog,
+the sample point and raster workflows, and unload. Details are in
+[DEVELOPMENT.md](DEVELOPMENT.md#release-packaging).
+
 ## Level 3: visual GUI smoke test
 
-Only what automation cannot judge. About 5 minutes, in QGIS 3.44.
+Only what automation cannot judge. About 5 minutes in QGIS 3.44, with the
+plugin installed from the release ZIP or the development link.
 
-1. Create the fixture data:
-   `tests\integration\run_qgis_integration_tests.bat --fixtures-only`
-2. Start QGIS and open **Contour Flow** (toolbar button, or **Plugins ▸ Contour Flow**).
-3. Check that the dialog appears correctly: groups are readable, nothing is
-   cut off, scrolling works, and the summary updates.
-4. Drag `tests\integration_output\fixtures\contour_flow_fixtures.gpkg` into
-   QGIS and add the `points` and `boundary_wgs84` layers.
-5. Points: `points`, field `elev`, style **Groundwater (blue)**, labels
-   *Major contours only*, boundary `boundary_wgs84`. Click **Generate Contours**.
-6. Check that the blue contours and labels look reasonable on the map, that
-   the labels follow the lines, and that the major lines are thicker.
-7. Check that the progress dialog appeared, and that the main dialog is
-   usable again afterwards.
-8. Toggle editing on the contour layer, move a vertex, and save. Editing works.
-9. Look for obvious visual glitches: overlapping labels, wrong colours,
-   layer order, icons.
+Open `sample_data/contour_flow_sample.qgz`, open **Contour Flow**, and run
+sample Test 1 (see `sample_data/README.md`). Then check:
+
+1. The dialog layout is clean and understandable; nothing is cut off.
+2. **Advanced settings** expands and collapses properly.
+3. The sample groundwater contours look reasonable (they fall towards the north-east).
+4. The blue **Groundwater** style looks appropriate: thin minor lines, thicker majors.
+5. The labels are readable and follow the lines.
+6. The progress dialog appears during the run (with **Cancel**), and the main
+   dialog is usable again afterwards.
+7. The contours can be edited by hand (toggle editing, move a vertex, save).
+8. There are no obvious clipping or layout glitches.
 
 Record the result:
 
 ```markdown
 ### Smoke test: <date>, QGIS <version>, <OS>
-Steps 1-9: PASS / FAIL (notes)
+Steps 1-8: PASS / FAIL (notes)
 ```
 
 ## Development-only offline harnesses
@@ -144,3 +156,6 @@ ground on real QGIS, so they are not part of the project's test suite.
 - Core engine and Professional controls: superseded by the Level 2 suite.
   First full real-QGIS run on QGIS 3.44.15 / GDAL 3.13.3: **16 passed, 0
   failed** (plus discovery), after the fixes listed in CHANGELOG.md.
+- Release readiness (0.1.0): 113 unit tests and **20 real-QGIS tests** pass,
+  together with the package test. The new tests found and fixed a crash
+  (multi-step feedback) that affected desktop use.

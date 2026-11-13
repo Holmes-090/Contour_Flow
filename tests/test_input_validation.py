@@ -60,10 +60,10 @@ class PointInputProblemTests(unittest.TestCase):
         self.assertIsNone(self.check())
 
     def test_no_layer(self):
-        self.assertEqual(self.check(has_layer=False), "Select a point layer.")
+        self.assertEqual(self.check(has_layer=False), "Choose a point layer.")
 
     def test_no_field(self):
-        self.assertEqual(self.check(field_name=""), "Select a value / elevation field.")
+        self.assertEqual(self.check(field_name=""), "Choose a value / elevation field.")
 
     def test_non_numeric_field(self):
         self.assertIn("not numeric", self.check(field_is_numeric=False))
@@ -77,14 +77,14 @@ class PointInputProblemTests(unittest.TestCase):
     def test_selected_mode_with_no_selection(self):
         self.assertEqual(
             self.check(feature_mode=FEATURES_SELECTED, selected_count=0),
-            "No features are selected in the point layer.",
+            "Select one or more point features in QGIS, or switch to All features.",
         )
 
     def test_selected_mode_with_selection(self):
         self.assertIsNone(self.check(feature_mode=FEATURES_SELECTED, selected_count=2))
 
     def test_layer_problem_reported_before_field_problem(self):
-        self.assertEqual(self.check(has_layer=False, field_name=""), "Select a point layer.")
+        self.assertEqual(self.check(has_layer=False, field_name=""), "Choose a point layer.")
 
 
 class RasterInputProblemTests(unittest.TestCase):
@@ -92,10 +92,10 @@ class RasterInputProblemTests(unittest.TestCase):
         self.assertIsNone(raster_input_problem(True))
 
     def test_no_layer(self):
-        self.assertEqual(raster_input_problem(False), "Select a raster layer.")
+        self.assertEqual(raster_input_problem(False), "Choose a raster layer.")
 
     def test_no_band(self):
-        self.assertEqual(raster_input_problem(True, -1), "Select a raster band.")
+        self.assertEqual(raster_input_problem(True, -1), "Choose a raster band.")
 
 
 class PreparePointSamplesTests(unittest.TestCase):

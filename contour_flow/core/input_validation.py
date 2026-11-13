@@ -68,15 +68,15 @@ def point_input_problem(
     :param selected_count: currently selected features in the layer.
     """
     if not has_layer:
-        return "Select a point layer."
+        return "Choose a point layer."
     if not field_name:
-        return "Select a value / elevation field."
+        return "Choose a value / elevation field."
     if not field_is_numeric:
         return f"Field '{field_name}' is not numeric."
     count = usable_feature_count(feature_mode, total_count, selected_count)
     if count == 0:
         if feature_mode == FEATURES_SELECTED:
-            return "No features are selected in the point layer."
+            return "Select one or more point features in QGIS, or switch to All features."
         return "The point layer has no features."
     return None
 
@@ -84,9 +84,9 @@ def point_input_problem(
 def raster_input_problem(has_layer, band=1):
     """Return the problem with raster-mode inputs, or ``None`` if usable."""
     if not has_layer:
-        return "Select a raster layer."
+        return "Choose a raster layer."
     if band is None or band < 1:
-        return "Select a raster band."
+        return "Choose a raster band."
     return None
 
 

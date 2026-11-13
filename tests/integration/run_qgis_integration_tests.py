@@ -271,7 +271,7 @@ def t_tin_linear(ctx):
              f"max plane deviation {error:.1e}")
 
 
-@test("TIN Clough-Toucher")
+@test("TIN Clough-Tocher")
 def t_tin_ct(ctx):
     from contour_flow.core.options import METHOD_TIN_CLOUGH_TOCHER
 
@@ -280,9 +280,9 @@ def t_tin_ct(ctx):
     check(layer.featureCount() > 0, "no contour lines")
     check(all(is_multiple(v, 0.5) for v in values(layer)), "values not multiples of 0.5")
     error = _plane_error(layer)
-    check(error < 0.05, f"Clough-Toucher deviates from the planar data by {error:.4f}")
+    check(error < 0.05, f"Clough-Tocher deviates from the planar data by {error:.4f}")
     meta = dict(json.loads(layer.customProperty("contour_flow/metadata"))["settings"])
-    check(meta["Interpolation method"].startswith("TIN, Clough"), f"metadata method {meta['Interpolation method']}")
+    check(meta["Interpolation method"].startswith("TIN Clough"), f"metadata method {meta['Interpolation method']}")
     ctx.note(f"{layer.featureCount()} lines; max plane deviation {error:.1e}")
 
 
@@ -530,7 +530,7 @@ def t_invalid(ctx):
         ("cell size too small", None, dict(cell_size=0.001), "cells"),
         ("conflicting duplicates, stop", None, dict(duplicate_mode=DUPLICATES_STOP), "different values"),
         ("boundary selected but none selected", None,
-         dict(boundary_layer=vector(ctx.sources["boundary_wgs84"], "b"), boundary_selected_only=True), "No features are selected"),
+         dict(boundary_layer=vector(ctx.sources["boundary_wgs84"], "b"), boundary_selected_only=True), "Select one or more boundary polygons"),
     ]
     ctx.points.selectByExpression('"id" IN (1, 2)')
     messages = []
@@ -701,6 +701,202 @@ def t_plugin(ctx):
     check(not iface.toolbar.actions(), "reload cycles left actions")
     project.removeAllMapLayers()
     ctx.note("toolbar/menu, real-widget filters, Generate via dialog, unload/reload verified")
+
+
+@test("Dialog: simple view, Advanced, first-run messages")
+def t_dialog_ui(ctx):
+    from qgis.core import QgsProject, QgsVectorLayer
+
+    from contour_flow.core import options as opt
+    from contour_flow.ui import contour_dialog as cd
+
+    project = QgsProject.instance()
+    project.removeAllMapLayers()
+
+    def shown(widget):
+        return not widget.isHidden()
+
+    ctx.stage = "empty project"
+    dialog = cd.ContourDialog()
+    check(dialog.validation_label.text() == cd.MSG_NO_LAYERS, f"empty project message: {dialog.validation_label.text()}")
+    check(not dialog.generate_button.isEnabled(), "Generate enabled without layers")
+    check(dialog.advanced_group.isCollapsed(), "Advanced settings not collapsed by default")
+    dialog.cleanup()
+    dialog.deleteLater()
+
+    ctx.stage = "only a raster: starts in Raster mode"
+    project.addMapLayer(raster(ctx.raster_path, "gradient_dem"))
+    dialog = cd.ContourDialog()
+    check(dialog.raster_mode_radio.isChecked(), "did not start in Raster mode with only a raster")
+    check(dialog.generate_button.isEnabled(), f"raster not ready: {dialog.validation_label.text()}")
+    check(not shown(dialog.raster_band_combo), "band row shown for a single-band raster")
+    check(not shown(dialog.advanced_interpolation_group) and not shown(dialog.advanced_surface_group),
+          "point-only advanced sections shown in Raster mode")
+    dialog.point_mode_radio.setChecked(True)
+    check(dialog.validation_label.text() == cd.MSG_NO_POINT_LAYERS, f"point mode message: {dialog.validation_label.text()}")
+    dialog.cleanup()
+    dialog.deleteLater()
+
+    ctx.stage = "point layer without numeric fields"
+    text_only = QgsVectorLayer("Point?crs=EPSG:32633&field=name:string", "text only", "memory")
+    project.addMapLayer(text_only)
+    dialog = cd.ContourDialog()
+    dialog.point_mode_radio.setChecked(True)
+    dialog.point_layer_combo.setLayer(text_only)
+    check(dialog.validation_label.text() == cd.MSG_NO_NUMERIC_FIELDS, f"no-numeric message: {dialog.validation_label.text()}")
+    project.removeMapLayer(text_only.id())
+
+    ctx.stage = "points: default view and dependent controls"
+    points = vector(ctx.sources["points"], "points")
+    project.addMapLayer(points)
+    dialog.point_layer_combo.setLayer(points)
+    dialog.value_field_combo.setField("elev")
+    check(dialog.generate_button.isEnabled(), f"not ready: {dialog.validation_label.text()}")
+    check(shown(dialog.target_count_spin) and not shown(dialog.fixed_interval_spin), "interval rows wrong for Automatic")
+    dialog.interval_mode_combo.setCurrentIndex(dialog.interval_mode_combo.findData("fixed"))
+    check(shown(dialog.fixed_interval_spin) and not shown(dialog.target_count_spin), "interval rows wrong for Fixed")
+    dialog.interval_mode_combo.setCurrentIndex(dialog.interval_mode_combo.findData("auto"))
+    check(not shown(dialog.geopackage_file_widget), "GeoPackage picker shown for temporary output")
+    dialog.output_mode_combo.setCurrentIndex(dialog.output_mode_combo.findData(opt.OUTPUT_GEOPACKAGE))
+    check(shown(dialog.geopackage_file_widget), "GeoPackage picker hidden for GeoPackage output")
+    dialog.output_mode_combo.setCurrentIndex(dialog.output_mode_combo.findData(opt.OUTPUT_TEMPORARY))
+    check(not dialog.idw_power_spin.isEnabled(), "IDW power enabled for TIN")
+    dialog.method_combo.setCurrentIndex(dialog.method_combo.findData(opt.METHOD_IDW))
+    check(dialog.idw_power_spin.isEnabled() and "influence" in dialog.method_combo.toolTip(), "IDW power/tooltip")
+    check(not dialog.cell_size_spin.isEnabled(), "cell size editable while Automatic is ticked")
+    check(dialog.major_auto_check.isChecked() and not dialog.major_every_spin.isEnabled(), "major spin enabled while automatic")
+    dialog.cell_size_auto_check.setChecked(False)
+    check(dialog.cell_size_spin.isEnabled(), "cell size not editable after unticking Automatic")
+    check(not dialog.buffer_spin.isEnabled() and not dialog.custom_extent_widget.isEnabled(), "extent controls enabled")
+    dialog.extent_mode_combo.setCurrentIndex(dialog.extent_mode_combo.findData(opt.EXTENT_BUFFERED_HULL))
+    check(dialog.buffer_spin.isEnabled(), "hull buffer disabled for buffered hull")
+    check(not dialog.smooth_iterations_spin.isEnabled(), "custom smoothing enabled for None")
+    dialog.smoothing_combo.setCurrentIndex(dialog.smoothing_combo.findData(opt.SMOOTH_CUSTOM))
+    check(dialog.smooth_iterations_spin.isEnabled() and dialog.keep_unsmoothed_check.isEnabled(), "custom smoothing")
+    check(not dialog.advanced_boundary_group.isEnabled(), "boundary options enabled without a boundary")
+
+    ctx.stage = "selected-features messages"
+    dialog.feature_mode_combo.setCurrentIndex(dialog.feature_mode_combo.findData("selected"))
+    check("Select one or more point features" in dialog.validation_label.text(), dialog.validation_label.text())
+    check(shown(dialog.selection_count_label), "selected count hidden")
+    boundary = vector(ctx.sources["boundary_wgs84"], "boundary_wgs84")
+    project.addMapLayer(boundary)
+    dialog.feature_mode_combo.setCurrentIndex(dialog.feature_mode_combo.findData("all"))
+    dialog.boundary_layer_combo.setLayer(boundary)
+    check(dialog.advanced_boundary_group.isEnabled(), "boundary options disabled with a boundary")
+    dialog.boundary_mode_combo.setCurrentIndex(dialog.boundary_mode_combo.findData(opt.BOUNDARY_SELECTED))
+    check("Select one or more boundary polygons" in dialog.validation_label.text(), dialog.validation_label.text())
+
+    ctx.stage = "request carries the Advanced values"
+    dialog.boundary_mode_combo.setCurrentIndex(dialog.boundary_mode_combo.findData(opt.BOUNDARY_ALL))
+    dialog.cell_size_auto_check.setChecked(False)
+    dialog.cell_size_spin.setValue(2.5)
+    req = dialog._build_request()
+    check((req.method, req.cell_size, req.extent_mode, req.smoothing_mode) ==
+          (opt.METHOD_IDW, 2.5, opt.EXTENT_BUFFERED_HULL, opt.SMOOTH_CUSTOM), f"request {req}")
+    dialog.cell_size_auto_check.setChecked(True)
+    check(dialog._build_request().cell_size == 0.0, "automatic cell size not sent as 0")
+
+    ctx.stage = "summary"
+    dialog.method_combo.setCurrentIndex(dialog.method_combo.findData(opt.METHOD_TIN_LINEAR))
+    dialog.extent_mode_combo.setCurrentIndex(dialog.extent_mode_combo.findData(opt.EXTENT_POINTS))
+    dialog.smoothing_combo.setCurrentIndex(dialog.smoothing_combo.findData(opt.SMOOTH_NONE))
+    dialog._refresh_summary()
+    text = dialog.summary_label.text()
+    for fragment in ("Usable points: <b>7</b>", "Method: <b>TIN Linear</b>", "Cell size: <b>0.16 m (automatic)</b>",
+                     "Contour interval: <b>0.5</b>", "Estimated levels:", "Clipped to: <b>boundary_wgs84</b>"):
+        check(fragment in text, f"summary lacks {fragment!r}: {text[:400]}")
+    dialog.cleanup()
+    dialog.deleteLater()
+    project.removeAllMapLayers()
+    ctx.note("first-run messages, Advanced collapsed, dependent enable/visibility, request and summary verified")
+
+
+@test("Sample data (README tests)")
+def t_sample_data(ctx):
+    from contour_flow.core import options as opt
+
+    folder = os.path.join(REPO, "sample_data")
+    gpkg = os.path.join(folder, "contour_flow_sample.gpkg")
+    wells = vector(f"{gpkg}|layername=sample_wells", "sample_wells")
+    site = vector(f"{gpkg}|layername=site_boundary", "site_boundary")
+    dem = raster(os.path.join(folder, "sample_dem.tif"), "sample_dem")
+    names = wells.fields().names()
+    check(wells.featureCount() == 13 and names[-4:] == ["well_id", "gw_elev", "ground_elev", "bedrock_elev"],
+          f"sample_wells has {wells.featureCount()} features, fields {names}")
+    site_polygon = next(site.getFeatures()).geometry()
+
+    results = {}
+    for name, field, style in (("groundwater", "gw_elev", opt.STYLE_GROUNDWATER),
+                               ("ground", "ground_elev", opt.STYLE_TOPOGRAPHIC),
+                               ("bedrock", "bedrock_elev", opt.STYLE_NEUTRAL)):
+        ctx.stage = f"sample test: {name}"
+        result = run(request(point_layer=wells, value_field=field, boundary_layer=site, style_preset=style,
+                             label_mode=opt.LABELS_MAJOR))
+        layer = result.contour_layer
+        levels = len(set(values(layer)))
+        check(4 <= levels <= 16, f"{name}: {levels} levels")
+        check(not _inside(layer, site_polygon), f"{name}: contours outside the site boundary")
+        check(not any(w.startswith("IMPORTANT:") for w in result.warnings), f"{name}: unexpected {result.warnings}")
+        majors = sorted({f["value"] for f in layer.getFeatures() if f["is_major"] == 1})
+        check(majors and all(is_multiple(v, 1.0) for v in majors), f"{name}: major contours not on round numbers: {majors}")
+        results[name] = (result.interval, levels, layer.featureCount(), result.warnings)
+    check(any("bedrock_elev" in w and "no usable value" in w for w in results["bedrock"][3]),
+          f"bedrock: the NULL bedrock value was not reported: {results['bedrock'][3]}")
+    check(not any("no usable value" in w for w in results["groundwater"][3]), "groundwater should have no NULLs")
+
+    ctx.stage = "sample test: DEM"
+    result = run(request(source_type="raster", raster_layer=dem, style_preset=opt.STYLE_TOPOGRAPHIC))
+    levels = sorted(set(values(result.contour_layer)))
+    check(5 <= len(levels) <= 20, f"DEM levels {levels}")
+    results["dem"] = (result.interval, len(levels), result.contour_layer.featureCount(), result.warnings)
+
+    ctx.stage = "sample project"
+    from qgis.core import QgsProject
+
+    project = QgsProject()  # a separate instance, so the global project is untouched
+    check(project.read(os.path.join(folder, "contour_flow_sample.qgz")), f"sample project did not open: {project.error()}")
+    order = [node.name() for node in project.layerTreeRoot().children()]  # top to bottom
+    check(order == ["sample_wells", "site_boundary", "sample_dem"], f"sample project layer order {order}")
+    check(all(layer.isValid() for layer in project.mapLayers().values()), "sample project has broken layers")
+    project.clear()
+    ctx.note("; ".join(f"{k}: interval {v[0]:g}, {v[1]} levels, {v[2]} lines" for k, v in results.items()))
+
+
+@test("Desktop sequence: contour project layers, reopen project")
+def t_desktop_sequence(ctx):
+    """Regression: contouring a *project* raster, then opening a project, crashed QGIS.
+
+    Cause: algorithms were run through QgsProcessingMultiStepFeedback, which led
+    to an access violation on a later event-loop pass or when layers were
+    deleted. The workflow now passes the caller's feedback directly. A crash
+    here kills the whole run, so this test is ordered late.
+    """
+    from qgis.core import QgsProject
+
+    from contour_flow.core import options as opt
+
+    project = QgsProject.instance()
+    qgz = os.path.join(REPO, "sample_data", "contour_flow_sample.qgz")
+    for round_ in range(3):
+        ctx.stage = f"round {round_ + 1}: open project"
+        check(project.read(qgz), f"could not open {qgz}: {project.error()}")
+        layers = {layer.name(): layer for layer in project.mapLayers().values()}
+        ctx.stage = f"round {round_ + 1}: contour project layers"
+        for req in (
+            request(source_type="raster", raster_layer=layers["sample_dem"], label_mode=opt.LABELS_MAJOR),
+            request(point_layer=layers["sample_wells"], value_field="gw_elev", boundary_layer=layers["site_boundary"],
+                    label_mode=opt.LABELS_MAJOR, style_preset=opt.STYLE_GROUNDWATER),
+            request(source_type="raster", raster_layer=layers["sample_dem"], boundary_layer=layers["site_boundary"]),
+        ):
+            result = run(req)
+            project.addMapLayer(result.contour_layer)
+        check(len(project.mapLayers()) == 6, f"{len(project.mapLayers())} layers in the project")
+        for _ in range(5):  # the multi-step-feedback crash surfaced on the next event-loop pass
+            QgsApplication.processEvents()
+    ctx.stage = "close project"
+    project.clear()
+    ctx.note("3 rounds: open project, raster + point + clipped raster contours added, reopen; no crash")
 
 
 @test("Plugin discovery from QGIS profile")

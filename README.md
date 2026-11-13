@@ -1,234 +1,130 @@
-# Contour Flow (QGIS plugin)
+# Contour Flow
 
-Contour Flow is an open-source QGIS plugin for generating **editable contour
-lines** from point elevations and raster surfaces using native QGIS and GDAL
+Contour Flow is an open-source QGIS plugin for generating editable contour
+lines from point elevations and raster surfaces using native QGIS and GDAL
 processing tools.
 
-It is a single-purpose plugin: point layers with a numeric value field, or an
-existing raster/DEM, in; an ordinary, editable QGIS line layer out.
+**Point or raster data in → editable contour lines out.** That is all it does.
 
-> **Status: early development (experimental, version 0.0.2).** Not yet
-> published. The processing pipeline is verified automatically against real
-> QGIS 3.44.15 / GDAL 3.13.3 (see [Testing](#testing)). A short visual GUI
-> check is still done by hand.
+![Contour Flow dialog](docs/images/dialog.png)
+![Groundwater contours from the sample data](docs/images/groundwater_contours.png)
 
-> **Professional review required.** Interpolated contours are *estimates*
-> derived from the supplied data and the chosen method. They do not add
-> information that is not in the data. Review them professionally before
-> using them for technical interpretation, e.g. groundwater flow directions,
-> earthworks, or regulatory reporting.
-
-## What it is (and is not)
-
-Contour Flow does one job: turn values into contour lines you can edit.
-
-It is **not** a general GIS toolkit, a hydrogeology suite, or a replacement
-for SAGA, GRASS or the Processing Toolbox. Every GIS step uses an algorithm
-that already ships with QGIS or GDAL. The plugin puts them behind one
-focused, documented workflow and records exactly what it did.
-
-The value field can be anything numeric: groundwater elevation, ground
-surface, bedrock, survey elevation, concentrations, and so on. The plugin
-makes no assumption about its meaning or units. Source layers are never modified.
-
-## Workflows
-
-**Point input:** point layer → numeric field (all or selected features) →
-TIN or IDW → extent and optional boundary → interpolate → contour → clip →
-optional smoothing → major/minor → labels and style → editable line layer.
-
-**Raster input:** raster/DEM → band → optional boundary → contour → clip →
-optional smoothing → major/minor → labels and style → editable line layer.
+> **Important interpretation note.** Interpolated contours are estimates
+> derived from the supplied data. Results should be reviewed by an
+> appropriately qualified user before technical or professional use.
 
 ## Features
 
-### Interpolation: TIN or IDW
+- **Point-to-contour workflow:** any numeric field of a point layer
+  (all features or only the selected ones).
+- **Raster/DEM contour workflow:** any band of a file-based raster.
+- **Interpolation methods:** TIN Linear, TIN Clough–Tocher and IDW. All are
+  QGIS's own algorithms; none of the mathematics is reimplemented.
+- **Automatic contour interval:** a clean 1, 2, 2.5 or 5 × 10ⁿ interval for
+  an approximate number of contours. Or a **fixed interval**.
+- **Clipping:** exact clipping to a polygon boundary, in any CRS.
+- **Smoothing:** optional, with presets. The source values are untouched.
+- **Major and minor contours:** major contours land on round numbers by
+  default.
+- **Labels:** off, major only, or all, using native QGIS labelling.
+- **Style presets:** Neutral, Topographic, Groundwater. Ordinary QGIS styles
+  you can change.
+- **Editable vector output:** ordinary QGIS line layers with fields `value`
+  and `is_major`.
+- **GeoPackage output:** never overwrites existing layers.
+- **GeoTIFF surface output:** keep the interpolated surface, optionally.
+- **Transparent:** a live summary before you run, and every setting stored in
+  the layer metadata.
 
-| Method | What it does | When to use |
+## Typical uses
+
+Groundwater elevation contours, ground-surface elevation, bedrock elevation,
+survey point elevations, DEM contours, and other numeric spatial surfaces
+(concentrations, thicknesses and so on). The value field can be anything
+numeric; the plugin makes no assumption about what it represents.
+
+## Quick start
+
+1. Install the plugin (see [Installation](#installation)) and add your data to QGIS.
+2. Open **Contour Flow** from the toolbar or **Plugins ▸ Contour Flow**.
+3. Choose **Point layer** (and its value field) or **Raster**.
+4. Optionally choose a boundary polygon to clip to.
+5. Keep **Interval: Automatic**, or set a fixed interval. Pick labels and a style.
+6. Check the **Summary**, then click **Generate Contours**.
+
+The result is a temporary layer. Save it (right-click ▸ *Make Permanent*), or
+choose **Save as: GeoPackage** before running. Technical options (method,
+cell size, extent, duplicates, smoothing, major frequency, surface output)
+are under **Advanced settings**. Their defaults suit most data.
+
+## Sample data
+
+[`sample_data/`](sample_data/README.md) contains a fictional well dataset
+(groundwater, ground-surface and bedrock elevations), a site boundary, a small
+DEM, and a ready-made QGIS project, `contour_flow_sample.qgz`. Its README
+walks through three five-minute tests.
+
+![DEM contours from the sample data](docs/images/dem_contours.png)
+
+## Interpolation methods
+
+| Method | How it works | Notes |
 |---|---|---|
-| **TIN, linear** | Triangulates the points and interpolates linearly inside each triangle. Values never exceed the data range. No values outside the points' convex hull. | Default. Honest, reproducible, good for sparse data such as wells. |
-| **TIN, Clough-Toucher** | Smooth (cubic) surface on the same triangulation. Can slightly over- or undershoot the data. | Smoother-looking contours from the same data. |
-| **IDW** | Inverse distance weighting: each cell is a weighted mean of all points. A higher **power** gives near points more weight (default 2). Values stay within the data range. It produces "bull's-eyes" around points and **extrapolates** everywhere in the extent. | Dense, evenly spread data. Use with care beyond the points. |
+| **TIN Linear** (default) | Triangulates the points and interpolates linearly within each triangle. | Honest and reproducible. Values never exceed the data range. No values outside the points' convex hull. |
+| **TIN Clough–Tocher** | A smoother (cubic) surface on the same triangulation. | Smoother contours. May slightly over- or undershoot the data. |
+| **IDW** | Inverse distance weighting: nearby points have more influence (power 2 by default). | Fills the whole extent, so it **extrapolates** beyond the measured points; the plugin warns when that happens. It can produce "bull's-eyes" around points. |
 
-Cell size is automatic (about 500 cells along the longer side of the
-extent) or set by you, in the point layer's CRS units.
-
-### Extent (point input)
-
-- **Bounding box of usable points** (default).
-- **Convex hull** of usable points.
-- **Convex hull + buffer**: the buffer is in the layer's CRS units. You get a
-  warning if the CRS is geographic.
-- **Boundary polygon**: the selected boundary is both the extent and the clip.
-- **Custom extent**: drawn, taken from a layer, or typed.
-
-The plugin never extrapolates silently. If part of the area lies outside the
-points' convex hull, the summary says so. For IDW, this is an **IMPORTANT**
-warning.
-
-### Boundary clipping
-
-Choose a polygon layer, using all features or only the selected ones, for
-point or raster input. The boundary may use a different CRS; it is
-transformed with the project's transformation settings. Multipart polygons
-are supported, and invalid polygons are repaired (and reported). The contour
-lines are clipped **exactly** to the boundary.
-
-### Duplicate locations
-
-Points at exactly the same location are grouped:
-
-- **Equal values:** a warning, and one point is used.
-- **Different values:** an **IMPORTANT** warning with examples. These may be
-  different wells, screens or intervals.
-
-You choose what happens: *keep the first value* (default), *average*, or
-*stop*.
-
-### Contour intervals
-
-- **Automatic:** a "nice" interval (1, 2, 2.5 or 5 × 10ⁿ) aiming for an
-  approximate number of contours (default 10), based on the value range.
-- **Fixed:** any positive interval.
-
-Levels are multiples of the interval. A run with no levels, or with more than
-1000, is refused.
-
-### Major and minor contours
-
-*Major contour every N intervals* sets the field `is_major` (1/0). Example:
-interval 0.25 and every 4 gives majors at 100.0, 101.0, 102.0, … Major lines
-are drawn thicker.
-
-### Smoothing (optional)
-
-Uses QGIS *Smooth*, Chaikin corner cutting:
-
-- **Light:** 1 iteration, offset 0.25.
-- **Medium:** 2 iterations, offset 0.25.
-- **Custom:** 1–5 iterations, offset 0.05–0.5.
-
-Smoothing changes line geometry only, never the point values or the surface.
-It is cosmetic and can move lines slightly away from the interpolated values,
-so it is off by default. Smoothed layers are named "… smoothed" and the
-metadata records the settings. Tick *Also keep an unsmoothed copy* to get both.
-
-### Labels and styles
-
-- **Labels:** native QGIS labels on `value`, either all contours or major
-  contours only. You choose the decimals. Labels are curved along the line
-  with a white buffer.
-- **Style presets:** Neutral (black), Topographic (brown), Groundwater (blue).
-
-Everything is ordinary QGIS styling, so you can change it in Layer Properties.
-
-### Output
-
-- **Contours:**
-  - **Temporary layer** (default). Save it with *Make Permanent*.
-  - **GeoPackage:** a new layer in a new or existing `.gpkg`. An existing
-    layer is never overwritten; a clashing name gets a `_2` suffix and a
-    warning. The style is stored in the GeoPackage.
-- **Interpolated surface** (point input only): not added, a temporary raster,
-  or a GeoTIFF. An existing file gets a new name.
-- **Attributes:** `value` (the contour level) and `is_major`.
-- **Metadata:** all processing settings, warnings and the review disclaimer
-  are stored once per layer (*Layer Properties ▸ Metadata*), not on every feature.
-
-### Summary, progress and cancel
-
-- The **Summary** section previews the run before you start it:
-  - point input: usable and skipped points;
-  - raster input: band;
-  - both: value range, method, cell size, extent, interval and approximate
-    number of levels.
-- During the run, a progress dialog shows each stage and has a working
-  **Cancel** button.
-- A failed or cancelled run leaves no partial outputs behind.
-
-## Intended users
-
-QGIS users, hydrogeologists, environmental consultants, geologists, and
-survey and GIS technicians.
-
-## Target QGIS versions
-
-| | Version | Notes |
-|---|---|---|
-| Minimum supported | **QGIS 3.44** | The current Long Term Release (LTR) and the final QGIS 3.x series. |
-| Tested | **QGIS 3.44.15 LTR** (Windows, GDAL 3.13.3) | The automated real-QGIS suite passes. |
-| QGIS 4.x | **Not tested** | The code uses `qgis.PyQt` and scoped enums to ease a future port, but **no QGIS 4 compatibility is claimed**. |
-| Maximum declared | 4.99 | Set in `metadata.txt`; required for QGIS 4 to load the plugin. |
-
-See [DEVELOPMENT.md](DEVELOPMENT.md#target-qgis-versions) for the reasoning.
-
-## Current limitations
-
-- **Processing runs in the QGIS main thread.** A progress dialog with Cancel
-  is shown, but QGIS cannot be used for other work until the run finishes.
-- Contour levels are always multiples of the interval (no base offset).
-- Only exact duplicate coordinates are detected. Near-coincident points
-  (e.g. 0.1 m apart) are not flagged.
-- The summary refreshes automatically only for inputs up to 100,000 features
-  or 50 million raster cells. For larger inputs, press *Refresh summary*.
-- For raster input with automatic intervals, the value range is that of the
-  whole band, even when a boundary is used.
-- Only file-based (GDAL) rasters can be contoured.
-- No groundwater-specific workflow yet (aerial basemaps, well labels and so
-  on are planned separately).
-- Not published to the official QGIS plugin repository. The author, e-mail
-  and repository URLs in `metadata.txt` are placeholders.
-
-## Development status
-
-| Milestone | Scope | Status |
-|---|---|---|
-| 0–2 | Repository, plugin shell, input selection | Done (tested in QGIS 3.44) |
-| Core engine | Data checks, TIN, raster contours, intervals, editable output | Done; verified on real QGIS |
-| Professional controls | IDW, extents, clipping, duplicates, smoothing, major/minor, labels, styles, GeoPackage, summary, progress | Done; verified on real QGIS |
-| Rename + integration testing | Renamed to Contour Flow; automated real-QGIS test suite | Done (17 tests passing) |
-| Later | Groundwater workflow, release polish | Not started |
-
-See [CHANGELOG.md](CHANGELOG.md) for details.
+No method adds information that is not in the data. Sparse or clustered
+points give uncertain contours whatever the method.
 
 ## Installation
 
-- **Developers:** link the `contour_flow/` folder into your QGIS profile
-  as described in [DEVELOPMENT.md](DEVELOPMENT.md).
-- **Users (future):** install from the official QGIS plugin repository via
-  *Plugins ▸ Manage and Install Plugins*, or from a ZIP file via
-  *Plugins ▸ Manage and Install Plugins ▸ Install from ZIP*.
+**From a release ZIP:**
 
-The Processing plugin (a core QGIS plugin, enabled by default) must be enabled.
+1. Download `contour-flow-<version>.zip`.
+2. In QGIS: **Plugins ▸ Manage and Install Plugins ▸ Install from ZIP**, then
+   choose the file and click *Install Plugin*.
+3. The plugin is marked *experimental*. If it is not listed, enable
+   *Settings ▸ Show also experimental plugins* in the Plugin Manager.
+
+**For development:** link the repository's `contour_flow/` folder into your
+QGIS profile. See [DEVELOPMENT.md](DEVELOPMENT.md).
+
+**Requirements:** QGIS **3.44 LTR**. The core **Processing** plugin must be
+enabled (it is by default). There are no other dependencies.
 
 ## Testing
 
-Three levels (details in [TESTING.md](TESTING.md)):
+| Level | What | Command |
+|---|---|---|
+| Unit tests | Pure-Python logic (intervals, validation, options, metadata) | `python -m unittest discover -s tests -t .` |
+| Real-QGIS integration tests | The real plugin running real QGIS/GDAL processing on fixtures with known answers, plus the sample data, the dialog and plugin loading | `tests\integration\run_qgis_integration_tests.bat` |
+| Package test | Builds the release ZIP, validates it, installs it into an isolated QGIS profile and runs it | `scripts\run_with_qgis.bat scripts\package_plugin.py` |
+| Visual smoke test | A short manual checklist | [TESTING.md](TESTING.md) |
 
-1. **Unit tests** (plain Python, 111 tests): `python -m unittest discover -s tests -t .`
-2. **Real-QGIS integration tests** (17 tests): run real TIN/IDW/GDAL
-   processing, clipping, smoothing, styling, GeoPackage/GeoTIFF output,
-   cancellation and plugin loading on synthetic fixtures with known answers:
-   `tests\integrationun_qgis_integration_tests.bat`
-3. **Visual smoke test** (manual, about 5 minutes): layout, map rendering,
-   labels, editing.
+Tested on **QGIS 3.44.15 LTR** (GDAL 3.13.3, Windows 11). QGIS 4 is not tested,
+and no QGIS 4 compatibility is claimed.
 
-## Repository
+## Current limitations
 
-The suggested repository name is **`Contour-Flow-QGIS`**. The local
-development folder can keep any name; only the plugin package folder
-`contour_flow/` matters to QGIS.
+- Processing runs in the QGIS main thread. A progress dialog with **Cancel**
+  is shown, but other QGIS work waits until the run finishes.
+- Contour levels are multiples of the interval (no base offset).
+- Only exact duplicate coordinates are detected, not points that are merely
+  close together.
+- Only file-based (GDAL) rasters can be contoured.
 
-## Documentation
+## Contributing and issues
 
-- [ARCHITECTURE.md](ARCHITECTURE.md): how the code is organised and why.
-- [DEVELOPMENT.md](DEVELOPMENT.md): QGIS setup, Processing algorithms used, debugging.
-- [TESTING.md](TESTING.md): testing philosophy, automated tests and the QGIS acceptance test.
-- [CHANGELOG.md](CHANGELOG.md): version history.
+Please report problems at
+<https://github.com/Holmes-090/Contour_Flow/issues>. Include the QGIS
+version and the plugin's log: **View ▸ Panels ▸ Log Messages ▸ Contour Flow**.
+
+Architecture and development notes: [ARCHITECTURE.md](ARCHITECTURE.md),
+[DEVELOPMENT.md](DEVELOPMENT.md), [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-Contour Flow is free software, licensed under the
-**GNU General Public License, version 2 or (at your option) any later version**
-(`GPL-2.0-or-later`). See [LICENSE](LICENSE). This matches QGIS's own license
-and meets the requirements of the official QGIS plugin repository.
+Contour Flow is free software, licensed under the **GNU General Public
+License, version 2 or (at your option) any later version**
+(`GPL-2.0-or-later`). See [LICENSE](LICENSE). This matches QGIS's own license.

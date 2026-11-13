@@ -13,7 +13,7 @@ GIS Contour Plugin/                 <- git repository root (suggested repo name:
 │   ├── metadata.txt                plugin metadata read by QGIS and plugins.qgis.org
 │   ├── LICENSE                     copy of the GPLv2 text (required inside the plugin ZIP)
 │   ├── contour_flow.py        plugin lifecycle: initGui() / unload()
-│   ├── icons/contour.svg           toolbar/menu icon (temporary, original artwork)
+│   ├── icons/contour_flow.svg/.png plugin icon (original artwork; PNG for metadata.txt)
 │   ├── ui/
 │   │   ├── contour_dialog.py       dialog behaviour: visibility, live checks, summary, run
 │   │   └── contour_dialog.ui       Qt Designer layout
@@ -37,6 +37,9 @@ GIS Contour Plugin/                 <- git repository root (suggested repo name:
 ├── tests/                          never shipped
 │   ├── test_*.py                   level 1: plain-Python unit tests for the (P) modules
 │   └── integration/                level 2: real-QGIS tests (fixtures.py, run_qgis_integration_tests.py/.bat)
+├── sample_data/                    fictional sample wells, boundary, DEM and QGIS project
+├── scripts/                        sample data, icon, screenshots, packaging (run with QGIS Python)
+├── docs/images/                    README screenshots rendered by QGIS
 ├── README.md, ARCHITECTURE.md, DEVELOPMENT.md, TESTING.md, CHANGELOG.md
 ├── LICENSE                         GPLv2 text (for GitHub and source distribution)
 └── .gitignore
@@ -88,15 +91,23 @@ toolbar icon, disconnects the action and deletes it.
 
 ### UI: `ui/`
 
-- `contour_dialog.ui` holds the layout: Input, Interpolation, Extent,
-  Boundary, Contours, Output and Summary groups in a scroll area, then the
+- `contour_dialog.ui` holds the layout in a scroll area. The **default view**
+  has Input, Boundary, Contours and Output. A collapsed **Advanced settings**
+  group (`QgsCollapsibleGroupBox`) holds interpolation, extent, duplicates,
+  boundary features, contour lines and surface output. Then come Summary, the
   Generate row and diagnostics. QGIS widgets are custom widgets with header
   `qgis.gui`.
 - `contour_dialog.py`:
-  - **visibility:** interpolation and extent groups only for points, IDW
-    power only for IDW, buffer only for the buffered hull, custom extent only
-    for Custom, custom smoothing values only for Custom, file pickers only
-    when saving;
+  - **visibility:** point-only Advanced sections are hidden for raster input,
+    the band row only for multi-band rasters, the count or fixed interval
+    according to the interval mode, and the GeoPackage picker only when
+    saving. Dependent controls are *disabled* (not hidden) until they apply:
+    IDW power, manual cell size, hull buffer, custom extent, custom smoothing,
+    major frequency and boundary features;
+  - **first run:** plain-language messages when the project has no suitable
+    layers, when a layer has no numeric field, or when "selected only" is
+    chosen with nothing selected. With only rasters present, the dialog
+    starts in Raster mode;
   - **live checks:** cheap checks only (layers, fields, selections, option
     values, output paths). They enable *Generate Contours*;
   - **summary:** a debounced (600 ms) call to `plan_contours`, automatic only
@@ -128,7 +139,8 @@ IDW cannot exceed it, so the summary equals the run. For raster input it
 comes from the band statistics.
 
 `run_contour_workflow(request, feedback, on_stage)` re-plans, then executes
-the stages with a `QgsProcessingMultiStepFeedback`:
+the stages, passing the caller's feedback straight to each algorithm (see
+DEVELOPMENT.md on why `QgsProcessingMultiStepFeedback` is not used):
 
 ```
 points: interpolate (TIN/IDW over extent) ─┐

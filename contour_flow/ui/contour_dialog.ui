@@ -13,8 +13,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>520</width>
-    <height>820</height>
+    <width>480</width>
+    <height>760</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -24,7 +24,7 @@
    <item>
     <widget class="QLabel" name="intro_label">
      <property name="text">
-      <string>Generate editable contour lines from point elevations or raster surfaces.</string>
+      <string>Create editable contour lines from points with a numeric field, or from a raster.</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>
@@ -82,12 +82,18 @@
                  <property name="checked">
                   <bool>true</bool>
                  </property>
+                 <property name="toolTip">
+                  <string>Interpolate a numeric field of a point layer, then contour the surface.</string>
+                 </property>
                 </widget>
                </item>
                <item>
                 <widget class="QRadioButton" name="raster_mode_radio">
                  <property name="text">
                   <string>Raster</string>
+                 </property>
+                 <property name="toolTip">
+                  <string>Contour an existing elevation raster (DEM).</string>
                  </property>
                 </widget>
                </item>
@@ -130,7 +136,11 @@
               </widget>
              </item>
              <item row="1" column="1">
-              <widget class="QgsFieldComboBox" name="value_field_combo"/>
+              <widget class="QgsFieldComboBox" name="value_field_combo">
+               <property name="toolTip">
+                <string>Numeric field to contour, e.g. groundwater or ground elevation.</string>
+               </property>
+              </widget>
              </item>
              <item row="2" column="0">
               <widget class="QLabel" name="feature_mode_caption">
@@ -142,31 +152,10 @@
              <item row="2" column="1">
               <widget class="QComboBox" name="feature_mode_combo"/>
              </item>
-             <item row="3" column="0">
-              <widget class="QLabel" name="selection_count_caption">
-               <property name="text">
-                <string>Selected count:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="3" column="1">
+             <item row="3" column="0" colspan="2">
               <widget class="QLabel" name="selection_count_label">
                <property name="text">
-                <string notr="true">-</string>
-               </property>
-              </widget>
-             </item>
-             <item row="4" column="0">
-              <widget class="QLabel" name="duplicate_mode_caption">
-               <property name="text">
-                <string>Duplicate locations:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="4" column="1">
-              <widget class="QComboBox" name="duplicate_mode_combo">
-               <property name="toolTip">
-                <string>Points at exactly the same location. Different values there may be different wells, screens or intervals.</string>
+                <string notr="true"/>
                </property>
               </widget>
              </item>
@@ -203,191 +192,22 @@
         </widget>
        </item>
        <item>
-        <widget class="QGroupBox" name="interpolation_group">
-         <property name="title">
-          <string>Interpolation</string>
-         </property>
-         <layout class="QFormLayout" name="interpolation_layout">
-          <item row="0" column="0">
-           <widget class="QLabel" name="method_caption">
-            <property name="text">
-             <string>Method:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="1">
-           <widget class="QComboBox" name="method_combo"/>
-          </item>
-          <item row="1" column="0">
-           <widget class="QLabel" name="idw_power_caption">
-            <property name="text">
-             <string>IDW power:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="1">
-           <widget class="QDoubleSpinBox" name="idw_power_spin">
-            <property name="decimals">
-             <number>2</number>
-            </property>
-            <property name="minimum">
-             <double>0.1</double>
-            </property>
-            <property name="maximum">
-             <double>99.99</double>
-            </property>
-            <property name="value">
-             <double>2.0</double>
-            </property>
-            <property name="toolTip">
-             <string>Distance coefficient P. Higher values give nearby points more weight (2 is the usual default).</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="0">
-           <widget class="QLabel" name="cell_size_caption">
-            <property name="text">
-             <string>Cell size:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="1">
-           <widget class="QDoubleSpinBox" name="cell_size_spin">
-            <property name="decimals">
-             <number>6</number>
-            </property>
-            <property name="minimum">
-             <double>0.0</double>
-            </property>
-            <property name="maximum">
-             <double>1000000000.0</double>
-            </property>
-            <property name="value">
-             <double>0.0</double>
-            </property>
-            <property name="toolTip">
-             <string>Surface cell size in the point layer's units. Automatic: about 500 cells along the longer side of the extent.</string>
-            </property>
-            <property name="specialValueText">
-             <string>Automatic</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
-        <widget class="QGroupBox" name="extent_group">
-         <property name="title">
-          <string>Extent</string>
-         </property>
-         <layout class="QFormLayout" name="extent_layout">
-          <item row="0" column="0">
-           <widget class="QLabel" name="extent_mode_caption">
-            <property name="text">
-             <string>Interpolate over:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="1">
-           <widget class="QComboBox" name="extent_mode_combo"/>
-          </item>
-          <item row="1" column="0">
-           <widget class="QLabel" name="buffer_caption">
-            <property name="text">
-             <string>Hull buffer:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="1">
-           <widget class="QDoubleSpinBox" name="buffer_spin">
-            <property name="decimals">
-             <number>4</number>
-            </property>
-            <property name="minimum">
-             <double>0.0</double>
-            </property>
-            <property name="maximum">
-             <double>1000000000.0</double>
-            </property>
-            <property name="value">
-             <double>0.0</double>
-            </property>
-            <property name="toolTip">
-             <string>Buffer distance around the convex hull, in the point layer's CRS units.</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="0">
-           <widget class="QLabel" name="custom_extent_caption">
-            <property name="text">
-             <string>Custom extent:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="1">
-           <widget class="QgsExtentWidget" name="custom_extent_widget"/>
-          </item>
-          <item row="3" column="0" colspan="2">
-           <widget class="QLabel" name="extent_note_label">
-            <property name="text">
-             <string>IDW extrapolates beyond the points; TIN stops at their convex hull.</string>
-            </property>
-            <property name="wordWrap">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
         <widget class="QGroupBox" name="boundary_group">
          <property name="title">
-          <string>Boundary / clipping (optional)</string>
+          <string>Boundary (optional)</string>
          </property>
          <layout class="QFormLayout" name="boundary_layout">
           <item row="0" column="0">
            <widget class="QLabel" name="boundary_layer_caption">
             <property name="text">
-             <string>Polygon layer:</string>
+             <string>Clip to polygon:</string>
             </property>
            </widget>
           </item>
           <item row="0" column="1">
-           <widget class="QgsMapLayerComboBox" name="boundary_layer_combo"/>
-          </item>
-          <item row="1" column="0">
-           <widget class="QLabel" name="boundary_mode_caption">
-            <property name="text">
-             <string>Use:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="1">
-           <widget class="QComboBox" name="boundary_mode_combo"/>
-          </item>
-          <item row="2" column="0">
-           <widget class="QLabel" name="boundary_count_caption">
-            <property name="text">
-             <string>Selected count:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="1">
-           <widget class="QLabel" name="boundary_count_label">
-            <property name="text">
-             <string notr="true">-</string>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="0" colspan="2">
-           <widget class="QLabel" name="boundary_note_label">
-            <property name="text">
-             <string>Contours are clipped exactly to the boundary.</string>
-            </property>
-            <property name="wordWrap">
-             <bool>true</bool>
+           <widget class="QgsMapLayerComboBox" name="boundary_layer_combo">
+            <property name="toolTip">
+             <string>Contours are clipped exactly to this polygon layer. Any CRS.</string>
             </property>
            </widget>
           </item>
@@ -408,7 +228,11 @@
            </widget>
           </item>
           <item row="0" column="1">
-           <widget class="QComboBox" name="interval_mode_combo"/>
+           <widget class="QComboBox" name="interval_mode_combo">
+            <property name="toolTip">
+             <string>Automatic picks a clean interval (1, 2, 2.5 or 5 x 10^n) from the data range and the approximate count.</string>
+            </property>
+           </widget>
           </item>
           <item row="1" column="0">
            <widget class="QLabel" name="target_count_caption">
@@ -429,7 +253,7 @@
              <number>10</number>
             </property>
             <property name="toolTip">
-             <string>The interval is chosen from 1, 2, 2.5 or 5 x 10^n to give about this many contour levels.</string>
+             <string>Roughly how many contour levels the automatic interval should give.</string>
             </property>
            </widget>
           </item>
@@ -455,138 +279,33 @@
              <double>1.0</double>
             </property>
             <property name="toolTip">
-             <string>Contours are drawn at multiples of this value, in the units of the value field or raster.</string>
+             <string>Contours are drawn at multiples of this value, in the units of the field or raster.</string>
             </property>
            </widget>
           </item>
           <item row="3" column="0">
-           <widget class="QLabel" name="major_every_caption">
-            <property name="text">
-             <string>Major contour every:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="1">
-           <widget class="QSpinBox" name="major_every_spin">
-            <property name="minimum">
-             <number>1</number>
-            </property>
-            <property name="maximum">
-             <number>1000</number>
-            </property>
-            <property name="value">
-             <number>5</number>
-            </property>
-            <property name="toolTip">
-             <string>Every Nth contour level is classified as major (is_major = 1).</string>
-            </property>
-            <property name="suffix">
-             <string> intervals</string>
-            </property>
-           </widget>
-          </item>
-          <item row="4" column="0">
-           <widget class="QLabel" name="smoothing_caption">
-            <property name="text">
-             <string>Smoothing:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="4" column="1">
-           <widget class="QComboBox" name="smoothing_combo"/>
-          </item>
-          <item row="5" column="0">
-           <widget class="QLabel" name="smooth_iterations_caption">
-            <property name="text">
-             <string>Iterations:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="5" column="1">
-           <widget class="QSpinBox" name="smooth_iterations_spin">
-            <property name="minimum">
-             <number>1</number>
-            </property>
-            <property name="maximum">
-             <number>5</number>
-            </property>
-            <property name="value">
-             <number>1</number>
-            </property>
-           </widget>
-          </item>
-          <item row="6" column="0">
-           <widget class="QLabel" name="smooth_offset_caption">
-            <property name="text">
-             <string>Offset:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="6" column="1">
-           <widget class="QDoubleSpinBox" name="smooth_offset_spin">
-            <property name="decimals">
-             <number>2</number>
-            </property>
-            <property name="minimum">
-             <double>0.05</double>
-            </property>
-            <property name="maximum">
-             <double>0.5</double>
-            </property>
-            <property name="value">
-             <double>0.25</double>
-            </property>
-            <property name="toolTip">
-             <string>Chaikin offset (0.05-0.5). Larger values round corners more.</string>
-            </property>
-           </widget>
-          </item>
-          <item row="7" column="0" colspan="2">
-           <widget class="QCheckBox" name="keep_unsmoothed_check">
-            <property name="text">
-             <string>Also keep an unsmoothed copy</string>
-            </property>
-           </widget>
-          </item>
-          <item row="8" column="0">
            <widget class="QLabel" name="label_mode_caption">
             <property name="text">
              <string>Labels:</string>
             </property>
            </widget>
           </item>
-          <item row="8" column="1">
+          <item row="3" column="1">
            <widget class="QComboBox" name="label_mode_combo"/>
           </item>
-          <item row="9" column="0">
-           <widget class="QLabel" name="label_decimals_caption">
-            <property name="text">
-             <string>Label decimals:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="9" column="1">
-           <widget class="QSpinBox" name="label_decimals_spin">
-            <property name="minimum">
-             <number>0</number>
-            </property>
-            <property name="maximum">
-             <number>6</number>
-            </property>
-            <property name="value">
-             <number>2</number>
-            </property>
-           </widget>
-          </item>
-          <item row="10" column="0">
+          <item row="4" column="0">
            <widget class="QLabel" name="style_caption">
             <property name="text">
-             <string>Style preset:</string>
+             <string>Style:</string>
             </property>
            </widget>
           </item>
-          <item row="10" column="1">
-           <widget class="QComboBox" name="style_combo"/>
+          <item row="4" column="1">
+           <widget class="QComboBox" name="style_combo">
+            <property name="toolTip">
+             <string>Colour preset. Minor lines thin, major lines thick.</string>
+            </property>
+           </widget>
           </item>
          </layout>
         </widget>
@@ -600,12 +319,16 @@
           <item row="0" column="0">
            <widget class="QLabel" name="output_mode_caption">
             <property name="text">
-             <string>Contours:</string>
+             <string>Save as:</string>
             </property>
            </widget>
           </item>
           <item row="0" column="1">
-           <widget class="QComboBox" name="output_mode_combo"/>
+           <widget class="QComboBox" name="output_mode_combo">
+            <property name="toolTip">
+             <string>Temporary layers are lost when QGIS closes unless saved. GeoPackage output never overwrites existing layers.</string>
+            </property>
+           </widget>
           </item>
           <item row="1" column="0">
            <widget class="QLabel" name="geopackage_caption">
@@ -631,25 +354,388 @@
             </property>
            </widget>
           </item>
-          <item row="3" column="0">
-           <widget class="QLabel" name="surface_mode_caption">
-            <property name="text">
-             <string>Interpolated surface:</string>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QgsCollapsibleGroupBox" name="advanced_group">
+         <property name="title">
+          <string>Advanced settings</string>
+         </property>
+         <layout class="QVBoxLayout" name="advanced_layout">
+          <item>
+           <widget class="QGroupBox" name="advanced_interpolation_group">
+            <property name="title">
+             <string>Interpolation (point input)</string>
             </property>
+            <property name="flat">
+             <bool>true</bool>
+            </property>
+            <layout class="QFormLayout" name="advanced_interpolation_layout">
+             <item row="0" column="0">
+              <widget class="QLabel" name="method_caption">
+               <property name="text">
+                <string>Method:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QComboBox" name="method_combo"/>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="idw_power_caption">
+               <property name="text">
+                <string>IDW power:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QDoubleSpinBox" name="idw_power_spin">
+               <property name="decimals">
+                <number>2</number>
+               </property>
+               <property name="minimum">
+                <double>0.1</double>
+               </property>
+               <property name="maximum">
+                <double>99.99</double>
+               </property>
+               <property name="value">
+                <double>2.0</double>
+               </property>
+               <property name="toolTip">
+                <string>Higher values give nearby points more influence. 2 is the usual choice.</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0" colspan="2">
+              <widget class="QCheckBox" name="cell_size_auto_check">
+               <property name="text">
+                <string>Automatic cell size</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+               <property name="toolTip">
+                <string>About 500 cells along the longer side of the extent.</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="0">
+              <widget class="QLabel" name="cell_size_caption">
+               <property name="text">
+                <string>Cell size:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="1">
+              <widget class="QDoubleSpinBox" name="cell_size_spin">
+               <property name="decimals">
+                <number>6</number>
+               </property>
+               <property name="minimum">
+                <double>1e-06</double>
+               </property>
+               <property name="maximum">
+                <double>1000000000.0</double>
+               </property>
+               <property name="value">
+                <double>1.0</double>
+               </property>
+               <property name="toolTip">
+                <string>Smaller cells give more detail but take longer and make larger files. In the point layer's CRS units.</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </widget>
           </item>
-          <item row="3" column="1">
-           <widget class="QComboBox" name="surface_mode_combo"/>
-          </item>
-          <item row="4" column="0">
-           <widget class="QLabel" name="surface_file_caption">
-            <property name="text">
-             <string>GeoTIFF:</string>
+          <item>
+           <widget class="QGroupBox" name="advanced_extent_group">
+            <property name="title">
+             <string>Extent (point input)</string>
             </property>
+            <property name="flat">
+             <bool>true</bool>
+            </property>
+            <layout class="QFormLayout" name="advanced_extent_layout">
+             <item row="0" column="0">
+              <widget class="QLabel" name="extent_mode_caption">
+               <property name="text">
+                <string>Interpolate over:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QComboBox" name="extent_mode_combo">
+               <property name="toolTip">
+                <string>Where the surface is computed. Values outside the measured points are less certain.</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="buffer_caption">
+               <property name="text">
+                <string>Hull buffer:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QDoubleSpinBox" name="buffer_spin">
+               <property name="decimals">
+                <number>4</number>
+               </property>
+               <property name="minimum">
+                <double>0.0</double>
+               </property>
+               <property name="maximum">
+                <double>1000000000.0</double>
+               </property>
+               <property name="value">
+                <double>10.0</double>
+               </property>
+               <property name="toolTip">
+                <string>Distance around the convex hull, in the point layer's CRS units.</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QLabel" name="custom_extent_caption">
+               <property name="text">
+                <string>Custom extent:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QgsExtentWidget" name="custom_extent_widget"/>
+             </item>
+            </layout>
            </widget>
           </item>
-          <item row="4" column="1">
-           <widget class="QgsFileWidget" name="surface_file_widget"/>
+          <item>
+           <widget class="QGroupBox" name="advanced_points_group">
+            <property name="title">
+             <string>Duplicate locations (point input)</string>
+            </property>
+            <property name="flat">
+             <bool>true</bool>
+            </property>
+            <layout class="QFormLayout" name="advanced_points_layout">
+             <item row="0" column="0">
+              <widget class="QLabel" name="duplicate_mode_caption">
+               <property name="text">
+                <string>Several points at one location:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QComboBox" name="duplicate_mode_combo">
+               <property name="toolTip">
+                <string>Different values at the same location may be different wells, screens or intervals.</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QGroupBox" name="advanced_boundary_group">
+            <property name="title">
+             <string>Boundary</string>
+            </property>
+            <property name="flat">
+             <bool>true</bool>
+            </property>
+            <layout class="QFormLayout" name="advanced_boundary_layout">
+             <item row="0" column="0">
+              <widget class="QLabel" name="boundary_mode_caption">
+               <property name="text">
+                <string>Boundary features:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QComboBox" name="boundary_mode_combo"/>
+             </item>
+             <item row="1" column="0" colspan="2">
+              <widget class="QLabel" name="boundary_count_label">
+               <property name="text">
+                <string notr="true"/>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QGroupBox" name="advanced_contours_group">
+            <property name="title">
+             <string>Contour lines</string>
+            </property>
+            <property name="flat">
+             <bool>true</bool>
+            </property>
+            <layout class="QFormLayout" name="advanced_contours_layout">
+             <item row="0" column="0" colspan="2">
+              <widget class="QCheckBox" name="major_auto_check">
+               <property name="text">
+                <string>Automatic major contours</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+               <property name="toolTip">
+                <string>Major contours on round numbers: every 1, 10, 100... units (or 5 for interval 1).</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="major_every_caption">
+               <property name="text">
+                <string>Major contour every:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QSpinBox" name="major_every_spin">
+               <property name="minimum">
+                <number>1</number>
+               </property>
+               <property name="maximum">
+                <number>1000</number>
+               </property>
+               <property name="value">
+                <number>5</number>
+               </property>
+               <property name="toolTip">
+                <string>Every Nth level is a major contour (field is_major = 1), drawn thicker.</string>
+               </property>
+               <property name="suffix">
+                <string> intervals</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QLabel" name="label_decimals_caption">
+               <property name="text">
+                <string>Label decimals:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QSpinBox" name="label_decimals_spin">
+               <property name="minimum">
+                <number>0</number>
+               </property>
+               <property name="maximum">
+                <number>6</number>
+               </property>
+               <property name="value">
+                <number>2</number>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="0">
+              <widget class="QLabel" name="smoothing_caption">
+               <property name="text">
+                <string>Smoothing:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="1">
+              <widget class="QComboBox" name="smoothing_combo">
+               <property name="toolTip">
+                <string>Rounds contour corners. Changes line geometry only, never the source values or the surface.</string>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="0">
+              <widget class="QLabel" name="smooth_iterations_caption">
+               <property name="text">
+                <string>Iterations:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="1">
+              <widget class="QSpinBox" name="smooth_iterations_spin">
+               <property name="minimum">
+                <number>1</number>
+               </property>
+               <property name="maximum">
+                <number>5</number>
+               </property>
+               <property name="value">
+                <number>1</number>
+               </property>
+              </widget>
+             </item>
+             <item row="5" column="0">
+              <widget class="QLabel" name="smooth_offset_caption">
+               <property name="text">
+                <string>Offset:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="5" column="1">
+              <widget class="QDoubleSpinBox" name="smooth_offset_spin">
+               <property name="decimals">
+                <number>2</number>
+               </property>
+               <property name="minimum">
+                <double>0.05</double>
+               </property>
+               <property name="maximum">
+                <double>0.5</double>
+               </property>
+               <property name="value">
+                <double>0.25</double>
+               </property>
+               <property name="toolTip">
+                <string>How much each corner is cut (0.05-0.5).</string>
+               </property>
+              </widget>
+             </item>
+             <item row="6" column="0" colspan="2">
+              <widget class="QCheckBox" name="keep_unsmoothed_check">
+               <property name="text">
+                <string>Also keep an unsmoothed copy</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QGroupBox" name="advanced_surface_group">
+            <property name="title">
+             <string>Interpolated surface (point input)</string>
+            </property>
+            <property name="flat">
+             <bool>true</bool>
+            </property>
+            <layout class="QFormLayout" name="advanced_surface_layout">
+             <item row="0" column="0">
+              <widget class="QLabel" name="surface_mode_caption">
+               <property name="text">
+                <string>Surface raster:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QComboBox" name="surface_mode_combo"/>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="surface_file_caption">
+               <property name="text">
+                <string>GeoTIFF:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QgsFileWidget" name="surface_file_widget"/>
+             </item>
+            </layout>
+           </widget>
           </item>
          </layout>
         </widget>
@@ -698,6 +784,9 @@
               </property>
               <property name="autoDefault">
                <bool>false</bool>
+              </property>
+              <property name="toolTip">
+               <string>Recalculate the summary (needed for very large inputs).</string>
               </property>
              </widget>
             </item>
@@ -769,7 +858,7 @@
      <item>
       <widget class="QLabel" name="plugin_version_caption">
        <property name="text">
-        <string>Plugin:</string>
+        <string>Contour Flow:</string>
        </property>
       </widget>
      </item>
@@ -848,6 +937,12 @@
    <class>QgsMessageBar</class>
    <extends>QFrame</extends>
    <header>qgis.gui</header>
+  </customwidget>
+  <customwidget>
+   <class>QgsCollapsibleGroupBox</class>
+   <extends>QGroupBox</extends>
+   <header>qgis.gui</header>
+   <container>1</container>
   </customwidget>
  </customwidgets>
  <resources/>

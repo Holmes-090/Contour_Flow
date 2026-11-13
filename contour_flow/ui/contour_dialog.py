@@ -6,17 +6,18 @@ The layout lives in ``contour_dialog.ui`` and is loaded at runtime with
 This module holds the dialog's behaviour only:
 
 * configuring the QGIS widgets (layer/field/band filters, file pickers);
-* showing only the controls that matter for the current choices;
-* cheap live validation that enables "Generate Contours";
-* a compact summary computed with ``core.workflow.plan_contours``, which is
+* a simple default view plus a collapsed **Advanced settings** section;
+  only the controls that apply are shown or enabled;
+* plain-language live validation that enables "Generate Contours";
+* a concise summary computed with ``core.workflow.plan_contours``, which is
   the same planning step the run uses;
 * running ``core.workflow.run_contour_workflow`` with a progress dialog and
   Cancel, then adding the returned layers to the project.
 
 No GIS processing happens here; that belongs in ``contour_flow.core``.
-Layers are never cached by ID. Every check reads the widgets' *current*
+Layers are never cached by ID; every check reads the widgets' *current*
 layers. The only external objects this dialog connects to are the current
-point and boundary layers (selection and feature changes). ``cleanup()``
+point and boundary layers (selection and feature changes); ``cleanup()``
 releases those connections.
 """
 
@@ -32,6 +33,7 @@ from qgis.PyQt.QtGui import QCursor
 from qgis.PyQt.QtWidgets import QApplication, QDialog, QProgressDialog
 
 from ..core import ContourCancelled, ContourError
+from ..core import options as opt
 from ..core.input_validation import (
     DUPLICATE_LABELS,
     DUPLICATES_KEEP_FIRST,
@@ -44,7 +46,6 @@ from ..core.input_validation import (
     raster_input_problem,
 )
 from ..core.intervals import INTERVAL_AUTO, INTERVAL_FIXED
-from ..core import options as opt
 from ..core.workflow import (
     SOURCE_POINTS,
     SOURCE_RASTER,
@@ -54,8 +55,8 @@ from ..core.workflow import (
 )
 from ..utils.qgis_helpers import PLUGIN_NAME, log_message, plugin_version
 
-#: Shown in the dialog's diagnostics row. Update at each milestone.
-BUILD_STATUS = "Professional controls development build"
+#: Shown in the dialog's diagnostics row.
+BUILD_STATUS = "release candidate"
 
 #: Layer signals that trigger re-validation (point and boundary layers).
 WATCHED_LAYER_SIGNALS = ("selectionChanged", "featureAdded", "featuresDeleted")
@@ -65,19 +66,32 @@ SUMMARY_AUTO_MAX_FEATURES = 100_000
 SUMMARY_AUTO_MAX_CELLS = 50_000_000
 SUMMARY_DELAY_MS = 600
 
+#: First-run and common-problem messages (plain language).
+MSG_NO_LAYERS = "Add a point layer with a numeric elevation field, or add an elevation raster."
+MSG_NO_POINT_LAYERS = "The project has no point layers. Add one, or switch Source to Raster."
+MSG_NO_RASTER_LAYERS = "The project has no raster layers. Add an elevation raster, or switch Source to Point layer."
+MSG_NO_NUMERIC_FIELDS = "The selected point layer has no numeric fields available for contouring."
+
 FORM_CLASS, _ = uic.loadUiType(
     os.path.join(os.path.dirname(__file__), "contour_dialog.ui")
 )
 
 
-def _fill(combo, items):
+def _fill(combo, items, tooltips=None):
     for data, text in items:
         combo.addItem(text, data)
+        if tooltips and data in tooltips:
+            combo.setItemData(combo.count() - 1, tooltips[data], Qt.ItemDataRole.ToolTipRole)
 
 
 def _show(visible, *widgets):
     for widget in widgets:
         widget.setVisible(visible)
+
+
+def _enable(enabled, *widgets):
+    for widget in widgets:
+        widget.setEnabled(enabled)
 
 
 class ContourDialog(QDialog, FORM_CLASS):
@@ -90,6 +104,7 @@ class ContourDialog(QDialog, FORM_CLASS):
         # Layers whose signals are connected: {"point": layer, "boundary": layer}.
         self._watched = {}
         self._running = False
+        self._last_auto_cell_size = None
 
         self._summary_timer = QTimer(self)
         self._summary_timer.setSingleShot(True)
@@ -99,6 +114,10 @@ class ContourDialog(QDialog, FORM_CLASS):
         self._configure_widgets(map_canvas)
         self._connect_signals()
         self._fill_diagnostics()
+
+        # First run: if there are rasters but no point layers, start in Raster mode.
+        if self.point_layer_combo.count() == 0 and self.raster_layer_combo.count() > 0:
+            self.raster_mode_radio.setChecked(True)
 
         self._watch("point", self.point_layer_combo.currentLayer())
         self._watch("boundary", self.boundary_layer_combo.currentLayer())
@@ -120,24 +139,30 @@ class ContourDialog(QDialog, FORM_CLASS):
         self.raster_band_combo.setLayer(self.raster_layer_combo.currentLayer())
 
         _fill(self.feature_mode_combo, [(FEATURES_ALL, "All features"), (FEATURES_SELECTED, "Selected features only")])
+        _fill(self.interval_mode_combo, [(INTERVAL_AUTO, "Automatic"), (INTERVAL_FIXED, "Fixed")])
+        _fill(self.label_mode_combo, list(opt.LABEL_LABELS.items()))
+        self.label_mode_combo.setCurrentIndex(self.label_mode_combo.findData(opt.LABELS_MAJOR))
+        _fill(self.style_combo, [(key, value["label"]) for key, value in opt.STYLE_PRESETS.items()])
+        _fill(self.output_mode_combo, [(opt.OUTPUT_TEMPORARY, "Temporary layer"), (opt.OUTPUT_GEOPACKAGE, "GeoPackage")])
+
+        # Advanced settings: collapsed by default, every time the dialog is created.
+        self.advanced_group.setSaveCollapsedState(False)
+        self.advanced_group.setCollapsed(True)
+        _fill(
+            self.method_combo,
+            [(m, opt.METHOD_LABELS[m]) for m in (opt.METHOD_TIN_LINEAR, opt.METHOD_TIN_CLOUGH_TOCHER, opt.METHOD_IDW)],
+            opt.METHOD_TOOLTIPS,
+        )
+        self.idw_power_spin.setValue(opt.IDW_POWER_DEFAULT)
+        _fill(self.extent_mode_combo, list(opt.EXTENT_LABELS.items()))
         _fill(self.duplicate_mode_combo, [
             (mode, DUPLICATE_LABELS[mode]) for mode in (DUPLICATES_KEEP_FIRST, DUPLICATES_MEAN, DUPLICATES_STOP)
         ])
-        _fill(self.method_combo, [
-            (m, opt.METHOD_LABELS[m]) for m in (opt.METHOD_TIN_LINEAR, opt.METHOD_TIN_CLOUGH_TOCHER, opt.METHOD_IDW)
-        ])
-        self.idw_power_spin.setValue(opt.IDW_POWER_DEFAULT)
-        _fill(self.extent_mode_combo, list(opt.EXTENT_LABELS.items()))
-        _fill(self.boundary_mode_combo, [(opt.BOUNDARY_ALL, "All features"), (opt.BOUNDARY_SELECTED, "Selected features only")])
-        _fill(self.interval_mode_combo, [(INTERVAL_AUTO, "Automatic (approximate count)"), (INTERVAL_FIXED, "Fixed interval")])
+        _fill(self.boundary_mode_combo, [(opt.BOUNDARY_ALL, "All"), (opt.BOUNDARY_SELECTED, "Selected only")])
         self.major_every_spin.setValue(opt.MAJOR_EVERY_DEFAULT)
         _fill(self.smoothing_combo, list(opt.SMOOTH_LABELS.items()))
         self.smooth_iterations_spin.setMaximum(opt.SMOOTH_MAX_ITERATIONS)
-        _fill(self.label_mode_combo, list(opt.LABEL_LABELS.items()))
-        self.label_mode_combo.setCurrentIndex(self.label_mode_combo.findData(opt.LABELS_MAJOR))
         self.label_decimals_spin.setMaximum(opt.LABEL_PRECISION_MAX)
-        _fill(self.style_combo, [(key, value["label"]) for key, value in opt.STYLE_PRESETS.items()])
-        _fill(self.output_mode_combo, [(opt.OUTPUT_TEMPORARY, "Temporary layer"), (opt.OUTPUT_GEOPACKAGE, "Save to GeoPackage")])
         _fill(self.surface_mode_combo, [
             (opt.SURFACE_NONE, "Do not add"),
             (opt.SURFACE_TEMPORARY, "Add as temporary raster"),
@@ -158,7 +183,7 @@ class ContourDialog(QDialog, FORM_CLASS):
             self.custom_extent_widget.setMapCanvas(map_canvas)
 
     def _connect_signals(self):
-        """Connect signals of widgets owned by this dialog (die with it)."""
+        """Connect signals of widgets owned by this dialog (they die with it)."""
         changed = self._on_inputs_changed
         self.point_mode_radio.toggled.connect(changed)
         # Order matters: update the dependent widget first, then validate.
@@ -167,6 +192,8 @@ class ContourDialog(QDialog, FORM_CLASS):
         self.raster_layer_combo.layerChanged.connect(self.raster_band_combo.setLayer)
         self.raster_layer_combo.layerChanged.connect(changed)
         self.boundary_layer_combo.layerChanged.connect(self._on_boundary_layer_changed)
+        self.cell_size_auto_check.toggled.connect(self._on_cell_size_auto_toggled)
+        self.major_auto_check.toggled.connect(changed)
 
         for signal in (
             self.value_field_combo.fieldChanged,
@@ -197,7 +224,7 @@ class ContourDialog(QDialog, FORM_CLASS):
         self.button_box.rejected.connect(self.reject)
 
     def _fill_diagnostics(self):
-        self.qgis_version_value.setText(Qgis.version())
+        self.qgis_version_value.setText(Qgis.version().split("-")[0])
         self.plugin_version_value.setText(plugin_version())
         self.status_value.setText(BUILD_STATUS)
 
@@ -248,6 +275,12 @@ class ContourDialog(QDialog, FORM_CLASS):
         if not self.custom_extent_widget.isValid():
             self.custom_extent_widget.setCurrentExtent(layer.extent(), layer.crs())
 
+    def _on_cell_size_auto_toggled(self, automatic):
+        # Switching to manual starts from the automatic value, if one is known.
+        if not automatic and self._last_auto_cell_size:
+            self.cell_size_spin.setValue(self._last_auto_cell_size)
+        self._on_inputs_changed()
+
     # ------------------------------------------------------ current choices
 
     def _is_point_mode(self):
@@ -275,7 +308,7 @@ class ContourDialog(QDialog, FORM_CLASS):
             duplicate_mode=self.duplicate_mode_combo.currentData(),
             method=self.method_combo.currentData(),
             idw_power=self.idw_power_spin.value(),
-            cell_size=self.cell_size_spin.value(),
+            cell_size=0.0 if self.cell_size_auto_check.isChecked() else self.cell_size_spin.value(),
             extent_mode=self.extent_mode_combo.currentData(),
             buffer_distance=self.buffer_spin.value(),
             custom_extent=self.custom_extent_widget.outputExtent() if self.custom_extent_widget.isValid() else None,
@@ -287,7 +320,7 @@ class ContourDialog(QDialog, FORM_CLASS):
             interval_mode=self.interval_mode_combo.currentData(),
             target_count=self.target_count_spin.value(),
             fixed_interval=self.fixed_interval_spin.value(),
-            major_every=self.major_every_spin.value(),
+            major_every=opt.MAJOR_EVERY_AUTO if self.major_auto_check.isChecked() else self.major_every_spin.value(),
             smoothing_mode=self.smoothing_combo.currentData(),
             smooth_iterations=self.smooth_iterations_spin.value(),
             smooth_offset=self.smooth_offset_spin.value(),
@@ -315,57 +348,66 @@ class ContourDialog(QDialog, FORM_CLASS):
         point_mode = self._is_point_mode()
         self.point_input_widget.setVisible(point_mode)
         self.raster_input_widget.setVisible(not point_mode)
-        self.interpolation_group.setVisible(point_mode)
-        self.extent_group.setVisible(point_mode)
+        raster = self._current_raster_layer()
+        _show(raster is not None and raster.bandCount() > 1, self.raster_band_caption, self.raster_band_combo)
 
-        _show(self.method_combo.currentData() == opt.METHOD_IDW, self.idw_power_caption, self.idw_power_spin)
-        extent_mode = self.extent_mode_combo.currentData()
-        self.buffer_spin.setEnabled(extent_mode == opt.EXTENT_BUFFERED_HULL)
-        self.buffer_caption.setEnabled(extent_mode == opt.EXTENT_BUFFERED_HULL)
-        _show(extent_mode == opt.EXTENT_CUSTOM, self.custom_extent_caption, self.custom_extent_widget)
-
-        has_boundary = self._current_boundary_layer() is not None
-        for widget in (self.boundary_mode_caption, self.boundary_mode_combo,
-                       self.boundary_count_caption, self.boundary_count_label):
-            widget.setEnabled(has_boundary)
+        selected_mode = self.feature_mode_combo.currentData() == FEATURES_SELECTED
+        self.selection_count_label.setVisible(point_mode and selected_mode)
 
         automatic = self.interval_mode_combo.currentData() == INTERVAL_AUTO
-        self.target_count_spin.setEnabled(automatic)
-        self.fixed_interval_spin.setEnabled(not automatic)
-
-        smoothing = self.smoothing_combo.currentData()
-        _show(smoothing == opt.SMOOTH_CUSTOM, self.smooth_iterations_caption, self.smooth_iterations_spin,
-              self.smooth_offset_caption, self.smooth_offset_spin)
-        self.keep_unsmoothed_check.setEnabled(smoothing != opt.SMOOTH_NONE)
-        self.label_decimals_spin.setEnabled(self.label_mode_combo.currentData() != opt.LABELS_NONE)
+        _show(automatic, self.target_count_caption, self.target_count_spin)
+        _show(not automatic, self.fixed_interval_caption, self.fixed_interval_spin)
+        _enable(self.label_mode_combo.currentData() != opt.LABELS_NONE,
+                self.label_decimals_caption, self.label_decimals_spin)
 
         geopackage = self.output_mode_combo.currentData() == opt.OUTPUT_GEOPACKAGE
-        self.geopackage_file_widget.setEnabled(geopackage)
-        self.geopackage_caption.setEnabled(geopackage)
-        _show(point_mode, self.surface_mode_caption, self.surface_mode_combo,
-              self.surface_file_caption, self.surface_file_widget)
+        _show(geopackage, self.geopackage_caption, self.geopackage_file_widget)
+
+        # Advanced: point-only sections are hidden for raster input.
+        for group in (self.advanced_interpolation_group, self.advanced_extent_group,
+                      self.advanced_points_group, self.advanced_surface_group):
+            group.setVisible(point_mode)
+        method = self.method_combo.currentData()
+        self.method_combo.setToolTip(opt.METHOD_TOOLTIPS.get(method, ""))
+        _enable(method == opt.METHOD_IDW, self.idw_power_caption, self.idw_power_spin)
+        _enable(not self.cell_size_auto_check.isChecked(), self.cell_size_caption, self.cell_size_spin)
+        _enable(not self.major_auto_check.isChecked(), self.major_every_caption, self.major_every_spin)
+        extent_mode = self.extent_mode_combo.currentData()
+        _enable(extent_mode == opt.EXTENT_BUFFERED_HULL, self.buffer_caption, self.buffer_spin)
+        _enable(extent_mode == opt.EXTENT_CUSTOM, self.custom_extent_caption, self.custom_extent_widget)
+
+        has_boundary = self._current_boundary_layer() is not None
+        self.advanced_boundary_group.setEnabled(has_boundary)
+        self.boundary_count_label.setVisible(
+            has_boundary and self.boundary_mode_combo.currentData() == opt.BOUNDARY_SELECTED
+        )
+
+        smoothing = self.smoothing_combo.currentData()
+        _enable(smoothing == opt.SMOOTH_CUSTOM, self.smooth_iterations_caption, self.smooth_iterations_spin,
+                self.smooth_offset_caption, self.smooth_offset_spin)
+        self.keep_unsmoothed_check.setEnabled(smoothing != opt.SMOOTH_NONE)
+
         geotiff = self.surface_mode_combo.currentData() == opt.SURFACE_GEOTIFF
-        self.surface_file_widget.setEnabled(geotiff)
-        self.surface_file_caption.setEnabled(geotiff)
+        _enable(geotiff, self.surface_file_caption, self.surface_file_widget)
 
     def _update_counts(self):
         layer = self._current_point_layer()
-        if layer is None:
-            text = "-"
-        else:
-            total = layer.featureCount()
-            selected = layer.selectedFeatureCount()
-            text = f"{selected} of {total}" if total >= 0 else f"{selected} (total unknown)"
-        self.selection_count_label.setText(text)
+        if layer is not None:
+            self.selection_count_label.setText(
+                f"{layer.selectedFeatureCount()} of {max(layer.featureCount(), 0)} features selected"
+            )
         boundary = self._current_boundary_layer()
-        self.boundary_count_label.setText(
-            "-" if boundary is None else f"{boundary.selectedFeatureCount()} of {boundary.featureCount()}"
-        )
+        if boundary is not None:
+            self.boundary_count_label.setText(
+                f"{boundary.selectedFeatureCount()} of {boundary.featureCount()} polygons selected"
+            )
 
     def _point_problem(self):
+        if self.point_layer_combo.count() == 0:
+            return MSG_NO_LAYERS if self.raster_layer_combo.count() == 0 else MSG_NO_POINT_LAYERS
         layer = self._current_point_layer()
         if layer is not None and self.value_field_combo.count() == 0:
-            return "The point layer has no numeric fields."
+            return MSG_NO_NUMERIC_FIELDS
         field_name = self.value_field_combo.currentField()
         problem = point_input_problem(
             has_layer=layer is not None,
@@ -393,14 +435,14 @@ class ContourDialog(QDialog, FORM_CLASS):
             return opt.output_path_problem(self.surface_file_widget.filePath().strip(), ".tif", "GeoTIFF")
         return None
 
+    def _raster_problem(self):
+        if self.raster_layer_combo.count() == 0:
+            return MSG_NO_LAYERS if self.point_layer_combo.count() == 0 else MSG_NO_RASTER_LAYERS
+        return raster_input_problem(self._current_raster_layer() is not None, self.raster_band_combo.currentBand())
+
     def _live_problem(self):
         """Cheap checks only. Data checks run in the summary and the run."""
-        if self._is_point_mode():
-            problem = self._point_problem()
-        else:
-            problem = raster_input_problem(
-                self._current_raster_layer() is not None, self.raster_band_combo.currentBand()
-            )
+        problem = self._point_problem() if self._is_point_mode() else self._raster_problem()
         if problem:
             return problem
         boundary = self._current_boundary_layer()
@@ -420,7 +462,7 @@ class ContourDialog(QDialog, FORM_CLASS):
         self._update_counts()
         problem = self._live_problem()
         self.generate_button.setEnabled(problem is None and not self._running)
-        self.validation_label.setText(problem or "Inputs look valid.")
+        self.validation_label.setText(problem or "Ready.")
         return problem is None
 
     # ---------------------------------------------------------------- summary
@@ -438,7 +480,7 @@ class ContourDialog(QDialog, FORM_CLASS):
     def _refresh_summary_if_cheap(self):
         if not self.isVisible():
             return  # refreshed again by showEvent
-        if self._summary_is_cheap():
+        if self._live_problem() or self._summary_is_cheap():
             self._refresh_summary()
         else:
             self.summary_label.setText("Large input: click <b>Refresh summary</b> to compute it.")
@@ -456,7 +498,12 @@ class ContourDialog(QDialog, FORM_CLASS):
             log_message("Summary failed:\n" + traceback.format_exc(), Qgis.MessageLevel.Warning)
             self.summary_label.setText("The summary could not be computed (see the log).")
             return
-        parts = [html.escape(line) for line in plan.summary_lines()]
+        if plan.cell_size_auto and plan.cell_size:
+            self._last_auto_cell_size = plan.cell_size
+        parts = []
+        for line in plan.summary_lines():
+            key, _sep, value = line.partition(": ")
+            parts.append(f"{html.escape(key)}: <b>{html.escape(value)}</b>" if value else html.escape(line))
         parts += [f'<span style="color:#b00020;"><b>Error:</b> {html.escape(e)}</span>' for e in plan.errors]
         for warning in plan.warnings:
             style = "color:#b00020;" if warning.startswith("IMPORTANT:") else "color:#8a5a00;"
@@ -491,10 +538,19 @@ class ContourDialog(QDialog, FORM_CLASS):
         progress.setAutoClose(False)
         progress.setAutoReset(False)
         progress.canceled.connect(feedback.cancel)
-        feedback.progressChanged.connect(lambda value: progress.setValue(int(value)))
+        # Overall progress = finished stages + the running algorithm's own progress.
+        stage_state = {"index": 0, "count": 1}
+
+        def on_progress(value):
+            done = stage_state["index"] * 100 + max(0.0, min(100.0, value))
+            progress.setValue(int(done / stage_state["count"]))
+
+        feedback.progressChanged.connect(on_progress)
 
         def on_stage(text, index, count):
+            stage_state.update(index=index, count=count)
             progress.setLabelText(f"{text}... ({index + 1}/{count})")
+            progress.setValue(int(index * 100 / count))
             QCoreApplication.processEvents()
 
         self._set_running(True)
@@ -517,7 +573,7 @@ class ContourDialog(QDialog, FORM_CLASS):
             log_message("Unexpected error:\n" + traceback.format_exc(), Qgis.MessageLevel.Critical)
             self.message_bar.pushMessage(
                 "Unexpected error",
-                "See the Log Messages panel, 'Contour Flow' tab, for details.",
+                f"See the Log Messages panel, '{PLUGIN_NAME}' tab, for details.",
                 level=Qgis.MessageLevel.Critical,
                 duration=0,
             )
