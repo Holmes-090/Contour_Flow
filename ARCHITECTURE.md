@@ -7,7 +7,7 @@ module is implemented.
 ## Repository layout
 
 ```
-GIS Contour Plugin/                 <- git repository root (development files)
+GIS Contour Plugin/                 <- git repository root (suggested repo name: Contour-Flow-QGIS)
 ├── contour_flow/              <- THE QGIS PLUGIN (only this folder ships to users)
 │   ├── __init__.py                 classFactory(): QGIS entry point
 │   ├── metadata.txt                plugin metadata read by QGIS and plugins.qgis.org
@@ -34,7 +34,9 @@ GIS Contour Plugin/                 <- git repository root (development files)
 │   │   └── output.py               GeoPackage writing, existing names, rollback
 │   └── utils/
 │       └── qgis_helpers.py         plugin name, logging, version, run_algorithm(), result layers
-├── tests/                          plain-Python unit tests for the (P) modules (never shipped)
+├── tests/                          never shipped
+│   ├── test_*.py                   level 1: plain-Python unit tests for the (P) modules
+│   └── integration/                level 2: real-QGIS tests (fixtures.py, run_qgis_integration_tests.py/.bat)
 ├── README.md, ARCHITECTURE.md, DEVELOPMENT.md, TESTING.md, CHANGELOG.md
 ├── LICENSE                         GPLv2 text (for GitHub and source distribution)
 └── .gitignore
@@ -131,9 +133,11 @@ the stages with a `QgsProcessingMultiStepFeedback`:
 ```
 points: interpolate (TIN/IDW over extent) ─┐
 raster: [crop to boundary bbox] ───────────┴─> contour (GDAL) -> editable copy (value, is_major)
-   -> [clip lines] -> [smooth] -> [surface output] -> [GeoPackage] -> style, labels, metadata
+   -> [clip lines] -> [smooth] -> [surface file] -> style, labels, metadata -> [GeoPackage write, then load]
 ```
 
+Output files are **opened as layers only after every write succeeded**. On
+Windows an open layer locks its file, which would make rollback impossible.
 Every file or GeoPackage layer the run writes is recorded. On any exception,
 including cancellation, `output.remove_written` deletes them, so no partial
 outputs remain.
@@ -146,6 +150,10 @@ outputs remain.
 - Extent modes give a rectangle (bounding box, custom) or a polygon (hull,
   buffered hull, boundary). A boundary always clips. With a polygon mode, the
   clip polygon is the intersection.
+- **Edge padding:** when there is a clip polygon, the interpolation grid and
+  the raster crop extend two cells beyond it (`EDGE_PADDING_CELLS`). Contours
+  are traced between cell centres, so an unpadded grid would lose contours in
+  the outer half cell. This was found by the real-QGIS tests.
 - **Clipping sequence (and why):** interpolate over the rectangle only (or,
   for raster input, crop it to the boundary's bounding box with
   `gdal:cliprasterbyextent`, which keeps values), contour, then clip the

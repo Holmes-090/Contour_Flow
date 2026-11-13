@@ -1,11 +1,16 @@
 # Contour Flow (QGIS plugin)
 
-A single-purpose QGIS plugin for making **editable vector contour lines** from
-point measurements or from an existing elevation raster.
+Contour Flow is an open-source QGIS plugin for generating **editable contour
+lines** from point elevations and raster surfaces using native QGIS and GDAL
+processing tools.
 
-> **Status: early development (experimental).** Not yet published. The
-> workflows below are implemented. They have been checked offline but not
-> yet fully exercised in QGIS (see [TESTING.md](TESTING.md)).
+It is a single-purpose plugin: point layers with a numeric value field, or an
+existing raster/DEM, in; an ordinary, editable QGIS line layer out.
+
+> **Status: early development (experimental, version 0.0.2).** Not yet
+> published. The processing pipeline is verified automatically against real
+> QGIS 3.44.15 / GDAL 3.13.3 (see [Testing](#testing)). A short visual GUI
+> check is still done by hand.
 
 > **Professional review required.** Interpolated contours are *estimates*
 > derived from the supplied data and the chosen method. They do not add
@@ -151,8 +156,8 @@ survey and GIS technicians.
 | | Version | Notes |
 |---|---|---|
 | Minimum supported | **QGIS 3.44** | The current Long Term Release (LTR) and the final QGIS 3.x series. |
-| Recommended for development | **QGIS 3.44 LTR** | Primary test environment. |
-| Second target | **QGIS 4.x** | Qt 6. The code uses `qgis.PyQt` and scoped enums; not yet tested on 4.x. |
+| Tested | **QGIS 3.44.15 LTR** (Windows, GDAL 3.13.3) | The automated real-QGIS suite passes. |
+| QGIS 4.x | **Not tested** | The code uses `qgis.PyQt` and scoped enums to ease a future port, but **no QGIS 4 compatibility is claimed**. |
 | Maximum declared | 4.99 | Set in `metadata.txt`; required for QGIS 4 to load the plugin. |
 
 See [DEVELOPMENT.md](DEVELOPMENT.md#target-qgis-versions) for the reasoning.
@@ -179,8 +184,9 @@ See [DEVELOPMENT.md](DEVELOPMENT.md#target-qgis-versions) for the reasoning.
 | Milestone | Scope | Status |
 |---|---|---|
 | 0–2 | Repository, plugin shell, input selection | Done (tested in QGIS 3.44) |
-| Core engine | Data checks, TIN, raster contours, intervals, editable output | Implemented; offline-checked |
-| Professional controls | IDW, extents, clipping, duplicates, smoothing, major/minor, labels, styles, GeoPackage, summary, progress | Implemented; offline-checked, awaiting QGIS test |
+| Core engine | Data checks, TIN, raster contours, intervals, editable output | Done; verified on real QGIS |
+| Professional controls | IDW, extents, clipping, duplicates, smoothing, major/minor, labels, styles, GeoPackage, summary, progress | Done; verified on real QGIS |
+| Rename + integration testing | Renamed to Contour Flow; automated real-QGIS test suite | Done (17 tests passing) |
 | Later | Groundwater workflow, release polish | Not started |
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
@@ -194,6 +200,24 @@ See [CHANGELOG.md](CHANGELOG.md) for details.
   *Plugins ▸ Manage and Install Plugins ▸ Install from ZIP*.
 
 The Processing plugin (a core QGIS plugin, enabled by default) must be enabled.
+
+## Testing
+
+Three levels (details in [TESTING.md](TESTING.md)):
+
+1. **Unit tests** (plain Python, 111 tests): `python -m unittest discover -s tests -t .`
+2. **Real-QGIS integration tests** (17 tests): run real TIN/IDW/GDAL
+   processing, clipping, smoothing, styling, GeoPackage/GeoTIFF output,
+   cancellation and plugin loading on synthetic fixtures with known answers:
+   `tests\integrationun_qgis_integration_tests.bat`
+3. **Visual smoke test** (manual, about 5 minutes): layout, map rendering,
+   labels, editing.
+
+## Repository
+
+The suggested repository name is **`Contour-Flow-QGIS`**. The local
+development folder can keep any name; only the plugin package folder
+`contour_flow/` matters to QGIS.
 
 ## Documentation
 

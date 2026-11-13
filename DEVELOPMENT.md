@@ -306,6 +306,69 @@ Run this from the repository root. They cover the pure modules
 (`options`, `input_validation`, `intervals`, `grid`, `report`), not the dialog
 or the Processing calls.
 
+## Real-QGIS integration tests
+
+The project runs its real code against a real QGIS installation, headless:
+
+```bat
+tests\integration\run_qgis_integration_tests.bat
+```
+
+See [TESTING.md](TESTING.md#level-2-real-qgis-integration-tests) for what it
+covers. How it works:
+
+- The `.bat` wrapper finds QGIS: `%QGIS_ROOT%`, otherwise
+  `C:\Program Files\QGIS 3.44*`, otherwise `QGIS 3*`. It calls QGIS's own
+  `bin\python-qgis-ltr.bat` (or `python-qgis.bat`), which sets `PATH`,
+  `PYTHONPATH` and `QGIS_PREFIX_PATH` through `o4w_env.bat`.
+- The runner starts `QgsApplication` with the GUI enabled but
+  `QT_QPA_PLATFORM=offscreen`, so real QGIS widgets and the dialog work
+  without a screen. It then calls `Processing.initialize()` (which registers
+  `native`, `qgis`, `gdal` and the other providers), runs the tests, and exits
+  with `os._exit(code)` after `exitQgis()`, so the exit code is reliable.
+- `qgis_process` was used to verify algorithm IDs and parameters
+  (`qgis_process-qgis-ltr.bat help gdal:contour`). It is not needed for the
+  suite, because standalone PyQGIS proved reliable on this installation.
+
+### Installation used for verification (this machine)
+
+| Item | Value |
+|---|---|
+| QGIS | 3.44.15-Solothurn (LTR), `C:\Program Files\QGIS 3.44.15` (the only install) |
+| `qgis_process` | `C:\Program Files\QGIS 3.44.15\bin\qgis_process-qgis-ltr.bat`, which wraps `apps\qgis-ltr\bin\qgis_process.exe` |
+| Python | `C:\Program Files\QGIS 3.44.15\bin\python3.exe` (3.12), via `bin\python-qgis-ltr.bat` |
+| GDAL / PROJ / GEOS / Qt | 3.13.3 / 9.8.1 / 3.15.0 / 5.15.13 |
+
+### QGIS 3.44 behaviour learned from the real tests
+
+- **Windows file locks:** an output file opened as a QGIS layer cannot be
+  deleted. The workflow therefore opens output files only after every write
+  succeeded, so rollback after a failure or Cancel can delete them.
+- **Contours stop half a cell inside a grid** (they are traced between cell
+  centres). Grids and raster crops are padded by two cells around a clip
+  polygon (`workflow.EDGE_PADDING_CELLS`); the vector clip is exact.
+- **`bandStatistics()`** warns "deprecated" in PyQGIS 3.44 even with the
+  recommended `Qgis.RasterBandStatistic` flags. With only Min|Max requested,
+  the GDAL provider returns `elementCount` 0, so judge validity by min/max.
+- **`saveStyleToDatabaseV2`** exists in 3.44.15 (documented as 4.0); the old
+  `saveStyleToDatabase` is deprecated.
+- After storing a style in a **new** GeoPackage, the loaded layer must be
+  `reload()`ed, otherwise GDAL prints "unable to open database file" on the
+  next feature count.
+
+### After the rename from `contour_generator`
+
+The development link in the QGIS profile must point at `contour_flow`:
+
+```powershell
+$plugins = "$env:APPDATA\QGIS\QGIS3\profiles\default\python\plugins"
+cmd /c rmdir "$plugins\contour_generator"   # removes only the old link
+New-Item -ItemType Junction -Path "$plugins\contour_flow" -Target "C:\Dev\GIS Contour Plugin\contour_flow"
+```
+
+Restart QGIS, then enable **Contour Flow** in the Plugin Manager. The old
+plugin entry is gone, and the "enabled" setting is per package name.
+
 ## Processing algorithms used
 
 | Step | Algorithm ID | Notes |

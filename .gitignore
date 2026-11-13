@@ -32,3 +32,16 @@ Desktop.ini
 *.qgs~
 *.qgz~
 *.aux.xml
+
+# Real-QGIS integration test output (fixtures and results, regenerated each run)
+tests/integration_output/
+
+# SQLite / GeoPackage side files left by QGIS or GDAL
+*.gpkg-wal
+*.gpkg-shm
+*.gpkg-journal
+*.sqlite-journal
+
+# Processing / GDAL temporary outputs that may land in the repo
+processing_*/
+*.tmp

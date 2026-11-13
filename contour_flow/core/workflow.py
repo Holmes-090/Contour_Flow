@@ -11,7 +11,7 @@ run uses the same plan, so the summary is what will happen.
     points: interpolate (TIN/IDW) over the extent ──┐
     raster: [crop to boundary bbox] ────────────────┴─> GDAL contour
       -> editable copy with value / is_major -> [clip to polygon] -> [smooth]
-      -> [GeoPackage] -> style + labels + metadata
+      -> style + labels + metadata -> [GeoPackage]
 
 Source layers are only read. Nothing is added to the project; the caller does
 that with the returned layers. On failure or cancellation, files and
@@ -89,13 +89,17 @@ from .options import (
     unique_file_path,
     unique_name,
 )
-from .output import geopackage_layer_names, remove_written, write_geopackage_layer
+from .output import geopackage_layer_names, load_geopackage_layer, remove_written, write_geopackage_layer
 from .report import METADATA_PROPERTY, metadata_json, metadata_text
 from .smoothing import smooth_lines
 from .styling import apply_style
 
 SOURCE_POINTS = "points"
 SOURCE_RASTER = "raster"
+
+#: Grids and raster crops extend this many cells beyond a clip polygon, so
+#: contours near its edge are not lost (they are traced between cell centres).
+EDGE_PADDING_CELLS = 2
 
 #: Share of the processing area outside the points' hull worth a warning.
 OUTSIDE_HULL_WARNING_FRACTION = 0.001
@@ -332,6 +336,11 @@ def _plan_points(plan, project, feedback):
     plan.cell_size = (
         auto_cell_size(plan.extent.width(), plan.extent.height()) if plan.cell_size_auto else r.cell_size
     )
+    if plan.clip_polygon is not None:
+        # Contours are traced between cell centres, so nothing is produced in
+        # the outer half cell of a grid. Pad the grid so contours reach the
+        # clip polygon's edge; the exact vector clip removes the padding.
+        plan.extent = plan.extent.buffered(EDGE_PADDING_CELLS * plan.cell_size)
     problem = grid_problem(plan.extent.width(), plan.extent.height(), plan.cell_size)
     if problem:
         plan.errors.append(problem)
@@ -478,6 +487,37 @@ class ContourResult:
     metadata: list = field(default_factory=list)
 
 
+def _load_written_layer(memory_layer, path, name, warnings):
+    """Load a layer just written to a GeoPackage, carrying over style and metadata.
+
+    Falls back to the in-memory layer (with a warning) if loading fails, so a
+    completed write is never rolled back.
+    """
+    try:
+        loaded = load_geopackage_layer(path, name)
+    except ContourError as exc:
+        warnings.append(f"{exc} The in-memory copy was added instead.")
+        return memory_layer
+    loaded.setRenderer(memory_layer.renderer().clone())
+    labeling = memory_layer.labeling()
+    loaded.setLabeling(labeling.clone() if labeling is not None else None)
+    loaded.setLabelsEnabled(memory_layer.labelsEnabled())
+    loaded.setMetadata(memory_layer.metadata())
+    loaded.setCustomProperty(METADATA_PROPERTY, memory_layer.customProperty(METADATA_PROPERTY))
+    try:  # store the style in the GeoPackage so the layer reopens styled
+        if hasattr(loaded, "saveStyleToDatabaseV2"):  # present in 3.44.15; the old call is deprecated
+            loaded.saveStyleToDatabaseV2(name, "Contour Flow style", True, "")
+        else:
+            loaded.saveStyleToDatabase(name, "Contour Flow style", True, "")
+    except Exception:  # noqa: BLE001 - optional convenience
+        warnings.append(f"The style could not be stored in the GeoPackage for '{name}'.")
+    # Saving the style creates the layer_styles table in a new file. Reopen the
+    # provider's connection, otherwise GDAL reports "unable to open database
+    # file" on the next feature count (seen with QGIS 3.44 / GDAL 3.13).
+    loaded.reload()
+    return loaded
+
+
 def _steps(plan):
     r = plan.request
     steps = []
@@ -493,9 +533,9 @@ def _steps(plan):
         steps.append(("smooth", "Smoothing contours"))
     if r.source_type == SOURCE_POINTS and r.surface_mode != SURFACE_NONE:
         steps.append(("surface", "Preparing surface output"))
+    steps.append(("style", "Styling and labelling"))
     if r.output_mode == OUTPUT_GEOPACKAGE:
         steps.append(("write", "Writing GeoPackage"))
-    steps.append(("style", "Styling and labelling"))
     return steps
 
 
@@ -561,7 +601,11 @@ def _execute(plan, project, feedback, on_stage, written):
         contour_input, band = r.raster_layer, r.raster_band
         if plan.clip_polygon is not None:
             stage("crop")
-            contour_input = crop_raster(r.raster_layer, plan.extent, context, child)
+            # Pad the crop by a few cells (see EDGE_PADDING_CELLS); the vector clip is exact.
+            layer = r.raster_layer
+            pad = EDGE_PADDING_CELLS * max(layer.rasterUnitsPerPixelX(), layer.rasterUnitsPerPixelY())
+            crop = plan.extent.buffered(pad).intersect(layer.extent())
+            contour_input = crop_raster(layer, crop, context, child)
 
     # 2. Contours, editable copy, clip, smooth
     stage("contour")
@@ -584,8 +628,10 @@ def _execute(plan, project, feedback, on_stage, written):
             (unsmoothed, f"{requested} unsmoothed" if requested else default_layer_name(plan.base_name, plan.interval))
         )
 
-    # 3. Optional surface output
-    surface_layer = None
+    # 3. Optional surface output. The file is only *opened* as a layer at the
+    #    very end: on Windows an open GDAL handle locks the file, and a locked
+    #    file could not be removed if a later step failed.
+    surface_out = None
     if points and r.surface_mode != SURFACE_NONE:
         stage("surface")
         target = "TEMPORARY_OUTPUT"
@@ -607,52 +653,52 @@ def _execute(plan, project, feedback, on_stage, written):
             surface_out = target
         if r.surface_mode == SURFACE_GEOTIFF:
             written.append(("file", surface_out, None))
-        temporary = " (temporary)" if r.surface_mode != SURFACE_GEOTIFF else ""
-        surface_layer = QgsRasterLayer(surface_out, f"Surface {plan.base_name} ({METHOD_LABELS[r.method]}){temporary}")
-        if not surface_layer.isValid():
-            raise ContourError(f"Could not load the surface output ({surface_out}).")
 
-    # 4. Output: temporary or GeoPackage
-    final_layers = []
-    if r.output_mode == OUTPUT_GEOPACKAGE:
+    # 4. Style, labels and metadata, on the in-memory layers
+    stage("style")
+    geopackage = r.output_mode == OUTPUT_GEOPACKAGE
+    output_description = f"GeoPackage {r.geopackage_path}" if geopackage else "Temporary layer (save it to keep it)"
+    items = metadata_items(plan, output_description)
+    for index, (layer, name) in enumerate(outputs):
+        layer.setName(name)
+        apply_style(layer, r.style_preset, r.label_mode, r.label_decimals)
+        _apply_metadata(layer, items + [("Smoothed geometry", bool(plan.smoothing) and index == 0)], warnings)
+
+    # 5. GeoPackage: write every layer first, then load them. No file handle
+    #    is open until all writes have succeeded (see step 3).
+    if geopackage:
         stage("write")
         path = r.geopackage_path
         existing = geopackage_layer_names(path)
-        if not os.path.exists(path):
+        new_file = not os.path.exists(path)
+        if new_file:
             written.append(("file", path, None))
-            new_file = True
-        else:
-            new_file = False
+        names = []
         for layer, name in outputs:
             safe = unique_name(name, existing)
             if safe != name:
                 warnings.append(f"A layer named '{name}' already exists in {os.path.basename(path)}; saved as '{safe}'.")
-            written_layer = write_geopackage_layer(layer, path, safe, project.transformContext())
+            write_geopackage_layer(layer, path, safe, project.transformContext())
             if not new_file:
                 written.append(("gpkg_layer", path, safe))
             existing.append(safe)
-            final_layers.append(written_layer)
-        output_description = f"GeoPackage {path}"
+            names.append(safe)
+        final_layers = []
+        for (memory_layer, _name), safe in zip(outputs, names):
+            final_layers.append(_load_written_layer(memory_layer, path, safe, warnings))
     else:
-        for layer, name in outputs:
-            layer.setName(name)
-            final_layers.append(layer)
-        output_description = "Temporary layer (save it to keep it)"
+        final_layers = [layer for layer, _name in outputs]
 
-    # 5. Style, labels, metadata
-    stage("style")
-    items = metadata_items(plan, output_description)
-    for index, layer in enumerate(final_layers):
-        apply_style(layer, r.style_preset, r.label_mode, r.label_decimals)
-        layer_items = items + [("Smoothed geometry", bool(plan.smoothing) and index == 0)]
-        _apply_metadata(layer, layer_items, warnings)
-        if r.output_mode == OUTPUT_GEOPACKAGE:
-            try:  # store the style in the GeoPackage so it reopens styled
-                layer.saveStyleToDatabase(layer.name(), "Contour Flow style", True, "")
-            except Exception:  # noqa: BLE001 - optional convenience
-                warnings.append(f"The style could not be stored in the GeoPackage for '{layer.name()}'.")
-    if surface_layer is not None:
-        _apply_metadata(surface_layer, items, warnings)
+    # 6. Nothing below may raise: outputs are complete and must not be rolled back.
+    surface_layer = None
+    if surface_out is not None:
+        temporary = " (temporary)" if r.surface_mode != SURFACE_GEOTIFF else ""
+        surface_layer = QgsRasterLayer(surface_out, f"Surface {plan.base_name} ({METHOD_LABELS[r.method]}){temporary}")
+        if surface_layer.isValid():
+            _apply_metadata(surface_layer, items, warnings)
+        else:
+            warnings.append(f"The surface was written to {surface_out} but could not be loaded.")
+            surface_layer = None
 
     contour_layer = final_layers[0]
     if contour_layer.featureCount() == 0:

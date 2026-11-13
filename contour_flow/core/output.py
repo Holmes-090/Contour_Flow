@@ -3,8 +3,10 @@
 
 * ``geopackage_layer_names`` lists the existing layers, read with GDAL/OGR,
   which ships with QGIS.
-* ``write_geopackage_layer`` adds one new layer to a new or existing ``.gpkg``
-  and loads it back as a QGIS layer.
+* ``write_geopackage_layer`` adds one new layer to a new or existing ``.gpkg``;
+  ``load_geopackage_layer`` opens it afterwards. The workflow writes all
+  layers before opening any, because an open layer locks the file on Windows
+  and would prevent rollback.
 * ``remove_written`` undoes writes after a failed run, so no partial outputs
   are left behind.
 """
@@ -32,9 +34,10 @@ def geopackage_layer_names(path):
 
 
 def write_geopackage_layer(layer, path, layer_name, transform_context=None):
-    """Write ``layer`` as a new layer ``layer_name`` in ``path``. Returns the loaded layer.
+    """Write ``layer`` as a new layer ``layer_name`` in ``path``.
 
     The caller must have made ``layer_name`` unique (see ``options.unique_name``).
+    The written layer is not opened here (see ``load_geopackage_layer``).
     """
     options = QgsVectorFileWriter.SaveVectorOptions()
     options.driverName = "GPKG"
@@ -50,6 +53,10 @@ def write_geopackage_layer(layer, path, layer_name, transform_context=None):
     )
     if error != QgsVectorFileWriter.WriterError.NoError:
         raise ContourError(f"Could not write layer '{layer_name}' to {path}: {message or error}")
+
+
+def load_geopackage_layer(path, layer_name):
+    """Open layer ``layer_name`` of the GeoPackage at ``path`` as a QGIS layer."""
     loaded = QgsVectorLayer(f"{path}|layername={layer_name}", layer_name, "ogr")
     if not loaded.isValid():
         raise ContourError(f"Layer '{layer_name}' was written to {path} but could not be loaded.")

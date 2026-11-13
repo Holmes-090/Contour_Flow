@@ -8,6 +8,8 @@
   work on an ordinary, editable QGIS layer.
 """
 
+import warnings
+
 from qgis.core import Qgis, QgsFeature, QgsVectorLayer, QgsWkbTypes
 
 from ..utils.qgis_helpers import run_algorithm
@@ -22,10 +24,19 @@ MAJOR_FIELD = "is_major"
 
 
 def raster_value_range(raster_layer, band):
-    """Return ``(minimum, maximum, valid_cell_count)`` of a raster band."""
-    stats = raster_layer.dataProvider().bandStatistics(
-        band, Qgis.RasterBandStatistic.Min | Qgis.RasterBandStatistic.Max
-    )
+    """Return ``(minimum, maximum, valid_cell_count)`` of a raster band.
+
+    Note: with only Min|Max requested, the GDAL provider reports
+    ``valid_cell_count`` 0 (verified on QGIS 3.44.15), so callers must judge
+    validity from min/max (see ``input_validation.raster_range_problem``).
+    """
+    with warnings.catch_warnings():
+        # PyQGIS 3.44 emits "bandStatistics() is deprecated" for every call,
+        # including the recommended Qgis.RasterBandStatistic form used here.
+        warnings.filterwarnings("ignore", message=r".*bandStatistics\(\) is deprecated", category=DeprecationWarning)
+        stats = raster_layer.dataProvider().bandStatistics(
+            band, Qgis.RasterBandStatistic.Min | Qgis.RasterBandStatistic.Max
+        )
     return stats.minimumValue, stats.maximumValue, stats.elementCount
 
 

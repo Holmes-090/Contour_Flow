@@ -6,6 +6,48 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Real-QGIS integration testing (QGIS 3.44.15, GDAL 3.13.3)
+
+Added:
+
+- `tests/integration/`: an automated suite that runs the real plugin code
+  against real QGIS Processing and GDAL algorithms, headless.
+  - `fixtures.py` generates fictional points (on a known plane), WGS84 and
+    multipart/invalid boundaries, and a gradient GeoTIFF.
+  - `run_qgis_integration_tests.py` holds 17 tests and prints a PASS/FAIL report.
+  - `run_qgis_integration_tests.bat` finds QGIS automatically.
+- Verified on this installation: all algorithm IDs and parameter names the
+  plugin uses (`qgis:tininterpolation`, `qgis:idwinterpolation`,
+  `gdal:contour`, `native:clip`, `native:smoothgeometry`,
+  `gdal:cliprasterbyextent`, `gdal:cliprasterbymasklayer`). No ID changes were
+  needed.
+- TESTING.md: three test levels (unit, real-QGIS, short visual smoke test).
+
+Fixed (found by the real-QGIS tests):
+
+- **Cleanup after a failed or cancelled run could leave files behind on
+  Windows.** Output files were opened as layers before later steps ran, and
+  an open layer locks the file. Now the surface GeoTIFF is opened only at the
+  end, styling runs on the in-memory layers, and GeoPackage layers are loaded
+  only after every write has succeeded.
+- **Contours next to a clip boundary could be missing.** Contours are traced
+  between cell centres, so an extent cropped exactly to the boundary lost
+  levels in the outer half cell (e.g. level 51 at x = 10.5 m). Interpolation
+  grids and raster crops are now padded by two cells around the clip
+  polygon, and the exact vector clip removes the padding.
+- **GeoPackage output printed a GDAL error** ("unable to open database file")
+  after the style was stored in a new file. The loaded layer is now reloaded
+  after saving the style.
+- GeoPackage styles are saved with `saveStyleToDatabaseV2` when available
+  (present in 3.44.15), avoiding a deprecated call.
+- A spurious PyQGIS 3.44 deprecation warning from `bandStatistics()` (it
+  appears even with the recommended `Qgis.RasterBandStatistic` flags) is
+  silenced at that one call.
+
+Confirmed on real QGIS (no code change needed): with only Min/Max requested,
+the GDAL provider reports a valid-cell count of 0. The range check already
+relied on min/max, so this was handled.
+
 ### Renamed to Contour Flow (version 0.0.2)
 
 - The plugin was previously developed as "Contour Generator". It is now
