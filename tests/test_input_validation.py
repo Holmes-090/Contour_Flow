@@ -8,7 +8,7 @@ Run from the repository root with plain Python (no QGIS needed):
 
 import unittest
 
-from contour_generator.core.input_validation import (
+from contour_flow.core.input_validation import (
     DUPLICATES_KEEP_FIRST,
     DUPLICATES_MEAN,
     DUPLICATES_STOP,

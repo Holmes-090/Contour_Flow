@@ -4,7 +4,7 @@
 import math
 import unittest
 
-from contour_generator.core.intervals import (
+from contour_flow.core.intervals import (
     INTERVAL_AUTO,
     INTERVAL_FIXED,
     MAX_CONTOUR_LEVELS,

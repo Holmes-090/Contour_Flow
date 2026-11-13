@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Main Contour Generator dialog.
+"""Main Contour Flow dialog.
 
 The layout lives in ``contour_dialog.ui`` and is loaded at runtime with
 ``qgis.PyQt.uic.loadUiType``, so no generated ``ui_*.py`` file is committed.
@@ -13,7 +13,7 @@ This module holds the dialog's behaviour only:
 * running ``core.workflow.run_contour_workflow`` with a progress dialog and
   Cancel, then adding the returned layers to the project.
 
-No GIS processing happens here; that belongs in ``contour_generator.core``.
+No GIS processing happens here; that belongs in ``contour_flow.core``.
 Layers are never cached by ID. Every check reads the widgets' *current*
 layers. The only external objects this dialog connects to are the current
 point and boundary layers (selection and feature changes). ``cleanup()``
@@ -517,7 +517,7 @@ class ContourDialog(QDialog, FORM_CLASS):
             log_message("Unexpected error:\n" + traceback.format_exc(), Qgis.MessageLevel.Critical)
             self.message_bar.pushMessage(
                 "Unexpected error",
-                "See the Log Messages panel, 'Contour Generator' tab, for details.",
+                "See the Log Messages panel, 'Contour Flow' tab, for details.",
                 level=Qgis.MessageLevel.Critical,
                 duration=0,
             )

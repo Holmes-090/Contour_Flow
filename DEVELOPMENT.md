@@ -65,7 +65,7 @@ When QGIS starts, it looks for Python plugins in:
 
 Each **subfolder** that contains a `metadata.txt` and an `__init__.py` is
 treated as a plugin. The subfolder name becomes the Python package name,
-which is why the plugin folder is called `contour_generator`.
+which is why the plugin folder is called `contour_flow`.
 
 Finding a plugin does not activate it. You must **enable** it once in
 **Plugins ▸ Manage and Install Plugins ▸ Installed**. QGIS then remembers
@@ -75,8 +75,8 @@ this in your profile.
 
 | Approach | How it works | Verdict |
 |---|---|---|
-| **Directory link (junction / symlink)** | A link in the profile `plugins` folder points at `contour_generator/` in this repository. QGIS reads your working files directly. | **Recommended.** Edit in one place, no copying. |
-| Direct copy | Copy `contour_generator/` into the profile `plugins` folder after each change. | Works, but easy to test a stale copy by mistake. |
+| **Directory link (junction / symlink)** | A link in the profile `plugins` folder points at `contour_flow/` in this repository. QGIS reads your working files directly. | **Recommended.** Edit in one place, no copying. |
+| Direct copy | Copy `contour_flow/` into the profile `plugins` folder after each change. | Works, but easy to test a stale copy by mistake. |
 | `QGIS_PLUGINPATH` | Point QGIS at an extra folder that contains plugin folders. | Valid alternative, but it would point at the repo root, which also contains `tests/` and docs. More setup, no real gain here. |
 | Install from ZIP | Zip the plugin folder and use *Install from ZIP*. | **Only for release testing** (see below), not day-to-day development. |
 
@@ -90,27 +90,27 @@ In **PowerShell** (not as administrator), with QGIS closed:
 ```powershell
 $plugins = "$env:APPDATA\QGIS\QGIS3\profiles\default\python\plugins"
 New-Item -ItemType Directory -Force $plugins | Out-Null
-New-Item -ItemType Junction -Path "$plugins\contour_generator" -Target "C:\Dev\GIS Contour Plugin\contour_generator"
+New-Item -ItemType Junction -Path "$plugins\contour_flow" -Target "C:\Dev\GIS Contour Plugin\contour_flow"
 ```
 
 Check that it worked:
 
 ```powershell
-Get-ChildItem "$env:APPDATA\QGIS\QGIS3\profiles\default\python\plugins\contour_generator"
+Get-ChildItem "$env:APPDATA\QGIS\QGIS3\profiles\default\python\plugins\contour_flow"
 ```
 
-You should see `__init__.py`, `metadata.txt`, `contour_generator.py`, etc.
+You should see `__init__.py`, `metadata.txt`, `contour_flow.py`, etc.
 
-Linux/macOS equivalent: `ln -s /path/to/repo/contour_generator <profile>/python/plugins/contour_generator`.
+Linux/macOS equivalent: `ln -s /path/to/repo/contour_flow <profile>/python/plugins/contour_flow`.
 
-> ⚠️ **Do not click "Uninstall plugin"** for Contour Generator in the Plugin
+> ⚠️ **Do not click "Uninstall plugin"** for Contour Flow in the Plugin
 > Manager while it is a junction. Uninstall deletes the plugin folder, and
 > through a link that can mean deleting **your source files in this
 > repository**. To stop using the plugin, *disable* it (untick it). To remove
 > the link, delete only the junction:
 >
 > ```powershell
-> (Get-Item "$env:APPDATA\QGIS\QGIS3\profiles\default\python\plugins\contour_generator").Delete()
+> (Get-Item "$env:APPDATA\QGIS\QGIS3\profiles\default\python\plugins\contour_flow").Delete()
 > ```
 >
 > This removes the link and leaves the target folder alone. Commit and push
@@ -137,7 +137,7 @@ Setup (once per QGIS installation):
 
 1. **Plugins ▸ Manage and Install Plugins ▸ All**, search for **Plugin Reloader**, install it.
 2. It adds a toolbar button and a configure option. Open its configuration
-   and choose **contour_generator** as the plugin to reload.
+   and choose **contour_flow** as the plugin to reload.
 
 Daily use:
 
@@ -184,7 +184,7 @@ after changing `metadata.txt`.
   - *Python warning*: Python warnings and some errors.
   - *Plugins*: plugin loading problems (e.g. a broken `metadata.txt`).
   - *Processing*: output of Processing algorithms.
-  - From Phase 1 the plugin will write to its own tab ("Contour Generator")
+  - From Phase 1 the plugin will write to its own tab ("Contour Flow")
     via `QgsMessageLog`.
 - **Processing history:** **Processing ▸ History** lists every algorithm run
   with its exact parameters.
@@ -199,8 +199,8 @@ after changing `metadata.txt`.
   and added to **both** places:
   - `iface.addToolBarIcon(action)` puts it on the **Plugins Toolbar**. If you
     don't see the button, check **View ▸ Toolbars ▸ Plugins Toolbar**.
-  - `iface.addPluginToMenu("Contour Generator", action)` creates a
-    **Plugins ▸ Contour Generator** submenu holding the action. A one-item
+  - `iface.addPluginToMenu("Contour Flow", action)` creates a
+    **Plugins ▸ Contour Flow** submenu holding the action. A one-item
     submenu named after the plugin is the standard QGIS convention, and it
     leaves room for later items such as Help or About.
 - `unload()` must call the matching `iface.removePluginMenu(...)` and
@@ -243,7 +243,7 @@ after changing `metadata.txt`.
 
 ### Logging
 
-- Errors go to **View ▸ Panels ▸ Log Messages ▸ Contour Generator** tab via
+- Errors go to **View ▸ Panels ▸ Log Messages ▸ Contour Flow** tab via
   `utils.qgis_helpers.log_message()`. Use this instead of `print()`, whose
   output is not visible in normal QGIS use.
 - Normal UI events (opening or closing the dialog) are deliberately not logged.
@@ -339,7 +339,7 @@ How a run is wired:
   cannot start other work during the run. Algorithms check
   `feedback.isCanceled()` themselves, and the workflow also checks between stages.
 - When an algorithm fails, the parameters and the Processing log are written to
-  **Log Messages ▸ Contour Generator**, and the *Processing* tab shows the GDAL
+  **Log Messages ▸ Contour Flow**, and the *Processing* tab shows the GDAL
   command line.
 - **To reproduce a run by hand,** use the same algorithms in the Processing
   Toolbox with the values from the output layer's metadata
@@ -349,7 +349,7 @@ How a run is wired:
 
   ```python
   import json
-  json.loads(iface.activeLayer().customProperty("contour_generator/metadata"))
+  json.loads(iface.activeLayer().customProperty("contour_flow/metadata"))
   ```
 
 ### Why TIN vs IDW behave differently at the edges
@@ -366,8 +366,8 @@ For users, the plugin will be delivered as a ZIP file containing a **single
 top-level folder**:
 
 ```
-contour_generator.zip
-└── contour_generator/
+contour_flow.zip
+└── contour_flow/
     ├── __init__.py
     ├── metadata.txt
     ├── LICENSE

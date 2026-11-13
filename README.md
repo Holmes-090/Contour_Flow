@@ -1,4 +1,4 @@
-# Contour Generator (QGIS plugin)
+# Contour Flow (QGIS plugin)
 
 A single-purpose QGIS plugin for making **editable vector contour lines** from
 point measurements or from an existing elevation raster.
@@ -15,7 +15,7 @@ point measurements or from an existing elevation raster.
 
 ## What it is (and is not)
 
-Contour Generator does one job: turn values into contour lines you can edit.
+Contour Flow does one job: turn values into contour lines you can edit.
 
 It is **not** a general GIS toolkit, a hydrogeology suite, or a replacement
 for SAGA, GRASS or the Processing Toolbox. Every GIS step uses an algorithm
@@ -187,7 +187,7 @@ See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ## Installation
 
-- **Developers:** link the `contour_generator/` folder into your QGIS profile
+- **Developers:** link the `contour_flow/` folder into your QGIS profile
   as described in [DEVELOPMENT.md](DEVELOPMENT.md).
 - **Users (future):** install from the official QGIS plugin repository via
   *Plugins ▸ Manage and Install Plugins*, or from a ZIP file via
@@ -204,7 +204,7 @@ The Processing plugin (a core QGIS plugin, enabled by default) must be enabled.
 
 ## License
 
-Contour Generator is free software, licensed under the
+Contour Flow is free software, licensed under the
 **GNU General Public License, version 2 or (at your option) any later version**
 (`GPL-2.0-or-later`). See [LICENSE](LICENSE). This matches QGIS's own license
 and meets the requirements of the official QGIS plugin repository.

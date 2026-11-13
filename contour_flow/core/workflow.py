@@ -648,7 +648,7 @@ def _execute(plan, project, feedback, on_stage, written):
         _apply_metadata(layer, layer_items, warnings)
         if r.output_mode == OUTPUT_GEOPACKAGE:
             try:  # store the style in the GeoPackage so it reopens styled
-                layer.saveStyleToDatabase(layer.name(), "Contour Generator style", True, "")
+                layer.saveStyleToDatabase(layer.name(), "Contour Flow style", True, "")
             except Exception:  # noqa: BLE001 - optional convenience
                 warnings.append(f"The style could not be stored in the GeoPackage for '{layer.name()}'.")
     if surface_layer is not None:

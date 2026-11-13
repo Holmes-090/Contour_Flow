@@ -6,6 +6,17 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Renamed to Contour Flow (version 0.0.2)
+
+- The plugin was previously developed as "Contour Generator". It is now
+  **Contour Flow**, with Python package and plugin folder `contour_flow`.
+  The visible name, menu, toolbar, log tab, dialog title, metadata strings
+  and the layer custom-property key (`contour_flow/metadata`) were renamed.
+- `ContourGeneratorPlugin` was renamed to `ContourFlowPlugin`, and the main
+  module `contour_generator.py` to `contour_flow.py`.
+- Version bumped to 0.0.2 (still experimental).
+- Suggested repository name: `Contour-Flow-QGIS`. The local folder was not renamed.
+
 ### Professional controls
 
 Added:
@@ -65,7 +76,7 @@ Added:
 - **Output attributes:** `value`, `is_major`. Everything else is stored at layer
   level:
   - the metadata abstract;
-  - JSON in the `contour_generator/metadata` custom property.
+  - JSON in the `contour_flow/metadata` custom property.
 
   This includes the input, field, feature mode, method, IDW power, cell size,
   extent mode, boundary, interval and its mode, major frequency, smoothing,
@@ -204,9 +215,9 @@ Not included: no interpolation, contouring, clipping, smoothing, styling or Proc
 
 Added:
 
-- One `QAction` ("Contour Generator"), shared by a Plugins-toolbar button and a
-  **Plugins ▸ Contour Generator** menu entry.
-- Temporary original SVG icon, `contour_generator/icons/contour.svg`.
+- One `QAction` ("Contour Flow"), shared by a Plugins-toolbar button and a
+  **Plugins ▸ Contour Flow** menu entry.
+- Temporary original SVG icon, `contour_flow/icons/contour.svg`.
 - Modeless main dialog, laid out in `ui/contour_dialog.ui` and loaded at runtime
   with `qgis.PyQt.uic.loadUiType`. It shows:
   - an introductory line;
@@ -218,7 +229,7 @@ Added:
 - `unload()` closes and deletes the dialog, removes the menu entry and toolbar
   button, disconnects the action's signal and deletes the action.
 - A dialog-creation failure is reported in the QGIS message bar, with the full
-  traceback in the Log Messages panel under a "Contour Generator" tab.
+  traceback in the Log Messages panel under a "Contour Flow" tab.
 - `utils/qgis_helpers.py`: `PLUGIN_NAME`, `log_message()` and `plugin_version()`.
 
 Changed:
@@ -231,7 +242,7 @@ Not included: no layer selectors, contouring, interpolation or Processing calls.
 
 Added:
 
-- Repository structure with the QGIS plugin in its own `contour_generator/` package.
+- Repository structure with the QGIS plugin in its own `contour_flow/` package.
 - Draft `metadata.txt` (version 0.0.1, experimental, QGIS 3.44–4.99, placeholder author and URLs).
 - Minimal `classFactory()` and empty plugin class, so the development install can be verified.
 - Placeholder modules (docstrings only) for UI, validation, interpolation, contouring,

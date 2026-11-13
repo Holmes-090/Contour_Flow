@@ -30,7 +30,7 @@ CROP_RASTER_ALGORITHM = "gdal:cliprasterbyextent"
 MASK_RASTER_ALGORITHM = "gdal:cliprasterbymasklayer"
 
 
-def polygon_layer(geometry, crs, name="contour_generator_clip"):
+def polygon_layer(geometry, crs, name="contour_flow_clip"):
     """Memory polygon layer holding ``geometry`` (used as a clip overlay)."""
     layer = QgsVectorLayer("MultiPolygon", name, "memory")
     layer.setCrs(crs)
@@ -64,7 +64,7 @@ def crop_raster(raster, rectangle, context, feedback):
 
 def mask_surface(raster_path, polygon, crs, nodata, output, context, feedback):
     """Mask the plugin's surface raster to ``polygon``. Returns the output path."""
-    mask = polygon_layer(polygon, crs, "contour_generator_mask")
+    mask = polygon_layer(polygon, crs, "contour_flow_mask")
     result = run_algorithm(
         MASK_RASTER_ALGORITHM,
         {

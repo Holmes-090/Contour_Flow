@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""QGIS plugin lifecycle for Contour Generator.
+"""QGIS plugin lifecycle for Contour Flow.
 
 Handles only what QGIS asks of a plugin:
 
@@ -9,7 +9,7 @@ Handles only what QGIS asks of a plugin:
 * ``unload()``: remove everything ``initGui()`` added and close the dialog.
 
 No interpolation, contouring or validation logic belongs here. That lives in
-``contour_generator.core``.
+``contour_flow.core``.
 """
 
 import os
@@ -22,7 +22,7 @@ from qgis.PyQt.QtWidgets import QAction
 from .utils.qgis_helpers import PLUGIN_NAME, log_message
 
 
-class ContourGeneratorPlugin:
+class ContourFlowPlugin:
     """Plugin object that QGIS creates through ``classFactory``."""
 
     def __init__(self, iface):
@@ -35,9 +35,9 @@ class ContourGeneratorPlugin:
         """Called by QGIS when the plugin is enabled (or reloaded)."""
         icon = QIcon(os.path.join(self.plugin_dir, "icons", "contour.svg"))
         self.action = QAction(icon, PLUGIN_NAME, self.iface.mainWindow())
-        self.action.setObjectName("contourGeneratorAction")
+        self.action.setObjectName("contourFlowAction")
         self.action.setToolTip(PLUGIN_NAME)
-        self.action.setStatusTip("Open the Contour Generator dialog")
+        self.action.setStatusTip("Open the Contour Flow dialog")
         self.action.triggered.connect(self.show_dialog)
 
         # The same action is used for the toolbar button and the menu entry.
@@ -78,7 +78,7 @@ class ContourGeneratorPlugin:
                 self.iface.messageBar().pushMessage(
                     PLUGIN_NAME,
                     "Could not open the dialog. Details are in the Log "
-                    "Messages panel, 'Contour Generator' tab.",
+                    "Messages panel, 'Contour Flow' tab.",
                     level=Qgis.MessageLevel.Critical,
                     duration=10,
                 )

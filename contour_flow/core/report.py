@@ -14,7 +14,7 @@ import json
 import math
 
 #: Layer custom-property key holding the JSON metadata.
-METADATA_PROPERTY = "contour_generator/metadata"
+METADATA_PROPERTY = "contour_flow/metadata"
 
 DISCLAIMER = (
     "Interpolated contours are estimates derived from the supplied data and "
@@ -38,7 +38,7 @@ def format_value(value):
 
 def metadata_text(items, warnings=()):
     """Return the abstract text: settings, warnings, disclaimer."""
-    lines = ["Created by the Contour Generator QGIS plugin."]
+    lines = ["Created by the Contour Flow QGIS plugin."]
     lines += [f"{label}: {format_value(value)}" for label, value in items]
     if warnings:
         lines.append("Warnings:")

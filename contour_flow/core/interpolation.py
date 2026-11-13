@@ -66,7 +66,7 @@ def read_point_samples(layer, field_name, selected_only, feedback=None):
 
 def build_point_layer(points, crs):
     """Return a temporary memory point layer holding ``(x, y, value)`` points."""
-    layer = QgsVectorLayer(f"Point?field={VALUE_FIELD}:double", "contour_generator_points", "memory")
+    layer = QgsVectorLayer(f"Point?field={VALUE_FIELD}:double", "contour_flow_points", "memory")
     layer.setCrs(crs)
     features = []
     for x, y, value in points:

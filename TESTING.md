@@ -41,11 +41,11 @@ Goal: confirm the development installation works. The plugin does nothing yet.
 |---|---|---|---|
 | 1 | Create the junction as in DEVELOPMENT.md and list its contents. | Plugin files are listed. | |
 | 2 | Start QGIS 3.44. | QGIS starts with no plugin error dialog. | |
-| 3 | Open **Plugins ▸ Manage and Install Plugins ▸ Installed**. | "Contour Generator" is listed, marked experimental, version 0.0.1. | |
+| 3 | Open **Plugins ▸ Manage and Install Plugins ▸ Installed**. | "Contour Flow" is listed, marked experimental, version 0.0.1. | |
 | 4 | Tick the checkbox to enable it. | No error dialog or message bar error. | |
 | 5 | Look at menus and toolbars. | **Nothing new appears.** This is expected in Phase 0. | |
-| 6 | Open **View ▸ Panels ▸ Log Messages**, check the *Plugins* and *Python warning* tabs. | No errors mentioning `contour_generator`. | |
-| 7 | (If Plugin Reloader is installed) configure it for `contour_generator` and click reload. | No errors. | |
+| 6 | Open **View ▸ Panels ▸ Log Messages**, check the *Plugins* and *Python warning* tabs. | No errors mentioning `contour_flow`. | |
+| 7 | (If Plugin Reloader is installed) configure it for `contour_flow` and click reload. | No errors. | |
 | 8 | Untick the plugin to disable it, then restart QGIS. | No errors. Plugin stays disabled. | |
 | 9 | (Optional) Repeat steps 2–6 on QGIS 4.x, using that version's profile folder. | Same results. | |
 
@@ -56,31 +56,31 @@ The plugin appeared in the Plugin Manager, enabled without errors, and the stub 
 
 Goal: confirm the toolbar button, menu entry, dialog and the load/unload/reload
 lifecycle work cleanly. Plugin Reloader must be installed and configured for
-`contour_generator` (see DEVELOPMENT.md).
+`contour_flow` (see DEVELOPMENT.md).
 
 Before starting: restart QGIS, so that the updated `metadata.txt` is read.
 
 | # | Step | Expected result | Pass/Fail |
 |---|---|---|---|
 | 1 | Start QGIS. | No error dialog or message bar error. | |
-| 2 | **Plugins ▸ Manage and Install Plugins ▸ Installed**: confirm Contour Generator is ticked (enabled). Close the manager. | Enabled. | |
-| 3 | Look at the **Plugins Toolbar**. If it is hidden, enable it via **View ▸ Toolbars ▸ Plugins Toolbar**. | Exactly **one** Contour Generator icon (brown contour rings). Hovering shows the tooltip "Contour Generator". | |
-| 4 | Open the **Plugins** menu. | Exactly **one** "Contour Generator" submenu, containing one "Contour Generator" item with the same icon. | |
+| 2 | **Plugins ▸ Manage and Install Plugins ▸ Installed**: confirm Contour Flow is ticked (enabled). Close the manager. | Enabled. | |
+| 3 | Look at the **Plugins Toolbar**. If it is hidden, enable it via **View ▸ Toolbars ▸ Plugins Toolbar**. | Exactly **one** Contour Flow icon (brown contour rings). Hovering shows the tooltip "Contour Flow". | |
+| 4 | Open the **Plugins** menu. | Exactly **one** "Contour Flow" submenu, containing one "Contour Flow" item with the same icon. | |
 | 5 | Click the toolbar icon. | — | |
-| 6 | Check the dialog. | One dialog titled "Contour Generator" opens, with: the intro line; a Diagnostics section; greyed-out "Input source" and "Contour settings" sections; and a Close button. | |
+| 6 | Check the dialog. | One dialog titled "Contour Flow" opens, with: the intro line; a Diagnostics section; greyed-out "Input source" and "Contour settings" sections; and a Close button. | |
 | 7 | Compare "QGIS version" with **Help ▸ About**. | Same version string (e.g. `3.44.x-Solothurn`). "Plugin version" shows `0.0.1`. "Status" shows `Phase 1 development build`. | |
 | 8 | Click **Close**. | Dialog closes. QGIS keeps working. The toolbar icon is still there. | |
-| 9 | Reopen via **Plugins ▸ Contour Generator ▸ Contour Generator**. | Dialog opens again with the same content. | |
+| 9 | Reopen via **Plugins ▸ Contour Flow ▸ Contour Flow**. | Dialog opens again with the same content. | |
 | 10 | With the dialog open, click the toolbar icon again. Optionally, first move the dialog or click the map canvas so the dialog is behind the main window. | The existing dialog comes to the front. | |
-| 11 | Check for duplicates, e.g. drag the dialog aside, or look at the taskbar or Alt+Tab. | Still only **one** Contour Generator dialog. | |
-| 12 | With the dialog still open, untick Contour Generator in the Plugin Manager (disable it). | Dialog closes. No error. | |
-| 13 | Close the Plugin Manager and check the toolbar and Plugins menu. | Contour Generator icon and submenu are gone. | |
-| 14 | Re-enable Contour Generator in the Plugin Manager. | No error. | |
+| 11 | Check for duplicates, e.g. drag the dialog aside, or look at the taskbar or Alt+Tab. | Still only **one** Contour Flow dialog. | |
+| 12 | With the dialog still open, untick Contour Flow in the Plugin Manager (disable it). | Dialog closes. No error. | |
+| 13 | Close the Plugin Manager and check the toolbar and Plugins menu. | Contour Flow icon and submenu are gone. | |
+| 14 | Re-enable Contour Flow in the Plugin Manager. | No error. | |
 | 15 | Check the toolbar and Plugins menu. | Exactly **one** icon and **one** submenu entry are back. | |
-| 16 | Reload with Plugin Reloader (its toolbar button, or its entry in the **Plugins** menu), with `contour_generator` selected in its settings. Repeat 2–3 times. | No error. | |
+| 16 | Reload with Plugin Reloader (its toolbar button, or its entry in the **Plugins** menu), with `contour_flow` selected in its settings. Repeat 2–3 times. | No error. | |
 | 17 | Check the toolbar and Plugins menu. | Still exactly **one** icon and **one** submenu entry. | |
 | 18 | Open the dialog from the toolbar, then close it. | Works as in steps 6–8. | |
-| 19 | **View ▸ Panels ▸ Log Messages**: check the *Python warning*, *Plugins* and *Contour Generator* tabs (the last appears only if something was logged). | No errors mentioning `contour_generator`. No Python error dialogs appeared during the test. | |
+| 19 | **View ▸ Panels ▸ Log Messages**: check the *Python warning*, *Plugins* and *Contour Flow* tabs (the last appears only if something was logged). | No errors mentioning `contour_flow`. No Python error dialogs appeared during the test. | |
 
 Optional extra check: close the dialog with the window's **X** button and with
 **Esc** instead of Close. Both should behave like step 8.
@@ -154,7 +154,7 @@ once, with any extent, to make a temporary raster.
 | # | Step | Expected result | Pass/Fail |
 |---|---|---|---|
 | 1 | Start QGIS (restart if it was open) with an **empty project**. | No errors. | |
-| 2 | Open Contour Generator from the toolbar. | Dialog opens. Status shows `Phase 2 development build`. *Point layer* mode is selected. | |
+| 2 | Open Contour Flow from the toolbar. | Dialog opens. Status shows `Phase 2 development build`. *Point layer* mode is selected. | |
 | 3 | Look at the Generate Contours button. | **Disabled.** Status text: "Select a point layer." | |
 | 4 | Run **Snippet A** in the Python Console. | Layer "Test wells" appears in the Layers panel. | |
 | 5 | Check the **Point layer** selector. | "Test wells" is listed (and selected automatically). | |
@@ -182,7 +182,7 @@ once, with any extent, to make a temporary raster.
 | 27 | Check the result. | A blue message bar **inside the dialog** says "Inputs are valid. Contour processing will be added in a later phase." No new layers appear, and no new entry appears in **Processing ▸ History** (compare before/after clicking). | |
 | 28 | Reload with **Plugin Reloader**. | No error. The dialog closes. | |
 | 29 | Reopen the dialog. Repeat steps 13–16 and 26 once. | Same behaviour. Exactly one toolbar icon and one menu entry. Each selection change updates the count once (no flicker or errors). Only one message bar message per click. | |
-| 30 | **View ▸ Panels ▸ Log Messages**: check the *Python warning*, *Plugins* and *Contour Generator* tabs. | No errors mentioning `contour_generator`. No Python error dialogs during the test. | |
+| 30 | **View ▸ Panels ▸ Log Messages**: check the *Python warning*, *Plugins* and *Contour Flow* tabs. | No errors mentioning `contour_flow`. No Python error dialogs during the test. | |
 
 Optional extras:
 
@@ -215,7 +215,7 @@ as W5 but with a different value) and one NULL value (W8).
 
 | # | Step | Expected result | Pass/Fail |
 |---|---|---|---|
-| 1 | Open Contour Generator. Point mode: *Test wells*, field `gw_elev`, All features, TIN linear, cell size Automatic, interval **Fixed 0.25**. Tick **Also add the interpolated surface**. Click **Generate Contours**. | After a moment, a green message: "Created 'Contours gw_elev (0.25)' with N line(s)…". A yellow note: 1 point skipped (no usable value in `gw_elev`), and 1 point ignored at a duplicate location (1 with a different value). Two new layers: the contours and "Surface gw_elev (temporary)". | |
+| 1 | Open Contour Flow. Point mode: *Test wells*, field `gw_elev`, All features, TIN linear, cell size Automatic, interval **Fixed 0.25**. Tick **Also add the interpolated surface**. Click **Generate Contours**. | After a moment, a green message: "Created 'Contours gw_elev (0.25)' with N line(s)…". A yellow note: 1 point skipped (no usable value in `gw_elev`), and 1 point ignored at a duplicate location (1 with a different value). Two new layers: the contours and "Surface gw_elev (temporary)". | |
 | 2 | Look at the map. | Contour lines lie inside the triangle hull of the points, over the surface raster. | |
 | 3 | Open the contour layer's attribute table. | Fields `ID` and `value`. All `value`s are multiples of 0.25 between 100.8 and 102.0 (e.g. 101, 101.25, 101.5, 101.75). | |
 | 4 | Toggle editing on the contour layer, move a vertex, save edits. | Works. The layer is fully editable. The layer icon shows it is a temporary (memory) layer. | |
@@ -226,7 +226,7 @@ as W5 but with a different value) and one NULL value (W8).
 | 9 | Features: All features. Interval **Fixed 0.0001**. Generate. | Red message saying the interval would create too many levels (limit 1000). No new layer. | |
 | 10 | Add any polygon layer (e.g. Snippet B from the Phase 2 test), pick it as the Boundary, interval Fixed 0.25, Generate. | It works, plus a note that clipping is not implemented and the contours are not clipped. | |
 | 11 | Plugin Reloader, then repeat step 1. | Same result. One toolbar icon. No errors. | |
-| 12 | **View ▸ Panels ▸ Log Messages**: the *Contour Generator* and *Python warning* tabs. | A "Contours generated." summary for each run, and "Contour generation stopped" for steps 8–9. No Python tracebacks. | |
+| 12 | **View ▸ Panels ▸ Log Messages**: the *Contour Flow* and *Python warning* tabs. | A "Contours generated." summary for each run, and "Contour generation stopped" for steps 8–9. No Python tracebacks. | |
 
 Optional, with a real DEM: Raster mode, Automatic interval → about 10 sensible
 contours. With a large DEM, expect QGIS to be busy (wait cursor) until it finishes.
@@ -264,7 +264,7 @@ f = QgsFeature(); f.setGeometry(g); poly.dataProvider().addFeatures([f]); QgsPro
 
 | # | Step | Expected result | Pass/Fail |
 |---|---|---|---|
-| 1 | Open Contour Generator. Points: *Test wells*, `gw_elev`, all features, duplicates *Keep first*, TIN linear, extent *Bounding box*, interval Automatic (10), major every 5, labels *Major contours only*. | **Summary:** "Points: 6 usable, 2 skipped or merged", "Range: 100.8 to 102", "Interval: 0.2, about 7 contour level(s)". A **red IMPORTANT** line about different values at one location, and an orange line about 1 point with no usable value. | |
+| 1 | Open Contour Flow. Points: *Test wells*, `gw_elev`, all features, duplicates *Keep first*, TIN linear, extent *Bounding box*, interval Automatic (10), major every 5, labels *Major contours only*. | **Summary:** "Points: 6 usable, 2 skipped or merged", "Range: 100.8 to 102", "Interval: 0.2, about 7 contour level(s)". A **red IMPORTANT** line about different values at one location, and an orange line about 1 point with no usable value. | |
 | 2 | **Generate Contours.** | The progress dialog shows stages. A green "Created 'Contours gw_elev (0.2)'…" message, then a red "Please check" note repeating the IMPORTANT warning. In the attribute table: `value` holds multiples of 0.2 and `is_major` = 1 only for 101 (and 102, if a line exists at the maximum). Major lines are thicker and only they are labelled. | |
 | 3 | *Layer Properties ▸ Metadata*. | The abstract lists the input, field, feature mode, method, cell size 0.2 (automatic), extent, interval, major every 5 (1), smoothing None, labels, style, plugin and QGIS versions, the warnings and the review disclaimer. | |
 | 4 | Duplicates → *Stop if values differ*. Wait for the summary, then Generate. | Summary and message: **Error** "…location(s) have points with different values…". Nothing is added. Set it back to *Keep first*. | |
@@ -275,7 +275,7 @@ f = QgsFeature(); f.setGeometry(g); poly.dataProvider().addFeatures([f]); QgsPro
 | 9 | Output **Save to GeoPackage**: pick a new `test.gpkg`, layer name `wells_contours`. Surface **Save as GeoTIFF**: pick a new `surface.tif`. Generate **twice**. | First run: layers loaded from `test.gpkg`, plus a surface raster masked to the boundary. Second run: a note that the name exists and was saved as `wells_contours_2`, and that the surface was saved as `surface_2.tif`. In the Browser panel, `test.gpkg` shows the layers, and they open styled. | |
 | 10 | Switch to **Raster**: raster = the saved `surface.tif`, band 1, boundary still set, interval **Fixed 0.25**, major every 4, smoothing None, output Temporary. | The interpolation and extent groups and the surface row are hidden. The summary shows band and range. Generate: lines clipped to the boundary, with `is_major` = 1 for whole numbers (101, and 102 if present). | |
 | 11 | Points again, IDW, extent Bounding box, cell size **0.025** (about 16 million cells). Generate, then click **Cancel** in the progress dialog. | "Cancelled. Nothing was added." No new layers. The dialog is usable again. | |
-| 12 | Plugin Reloader, then repeat step 2. *View ▸ Panels ▸ Log Messages*: the *Contour Generator* and *Python warning* tabs. | The same result as step 2. A "Contours generated." summary for each run and "Contour generation stopped" for step 4. No Python tracebacks. | |
+| 12 | Plugin Reloader, then repeat step 2. *View ▸ Panels ▸ Log Messages*: the *Contour Flow* and *Python warning* tabs. | The same result as step 2. A "Contours generated." summary for each run and "Contour generation stopped" for step 4. No Python tracebacks. | |
 
 If step 11 finishes before you can cancel, lower the cell size slightly. A
 grid of more than 25 million cells is refused by design.
@@ -299,7 +299,7 @@ Copy this for each phase.
 | 1 |      |                 |               |           |
 | 2 |      |                 |               |           |
 
-Errors seen in Log Messages (Plugins / Python warning / Processing / Contour Generator tabs):
+Errors seen in Log Messages (Plugins / Python warning / Processing / Contour Flow tabs):
 
 -
 

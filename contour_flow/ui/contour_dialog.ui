@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Contour Generator main dialog layout (Qt Designer file).
+  Contour Flow main dialog layout (Qt Designer file).
   Layout only. All behaviour (filters, visibility, validation, running) lives in contour_dialog.py.
   Loaded at runtime with qgis.PyQt.uic.loadUiType; no generated Python file is committed.
   QGIS widgets are declared as custom widgets with header "qgis.gui".
@@ -18,7 +18,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Contour Generator</string>
+   <string>Contour Flow</string>
   </property>
   <layout class="QVBoxLayout" name="main_layout">
    <item>

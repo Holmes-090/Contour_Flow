@@ -5,9 +5,9 @@ import os
 import tempfile
 import unittest
 
-from contour_generator.core import options as o
-from contour_generator.core.intervals import is_major_level
-from contour_generator.core.report import (
+from contour_flow.core import options as o
+from contour_flow.core.intervals import is_major_level
+from contour_flow.core.report import (
     DISCLAIMER,
     format_value,
     metadata_json,

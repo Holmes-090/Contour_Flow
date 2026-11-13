@@ -10,7 +10,7 @@ import os
 from qgis.core import Qgis, QgsMessageLog
 
 #: Display name used for the action, the Plugins submenu and the log tab.
-PLUGIN_NAME = "Contour Generator"
+PLUGIN_NAME = "Contour Flow"
 
 #: Root folder of the plugin package (the folder that holds metadata.txt).
 PLUGIN_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

@@ -3,7 +3,7 @@
 
 import unittest
 
-from contour_generator.core.grid import MAX_GRID_CELLS, auto_cell_size, grid_problem, grid_shape
+from contour_flow.core.grid import MAX_GRID_CELLS, auto_cell_size, grid_problem, grid_shape
 
 
 class AutoCellSizeTests(unittest.TestCase):

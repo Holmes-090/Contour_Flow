@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes how Contour Generator is organised and the rules that
+This document describes how Contour Flow is organised and the rules that
 keep it maintainable. As of the *Professional controls* milestone, every
 module is implemented.
 
@@ -8,11 +8,11 @@ module is implemented.
 
 ```
 GIS Contour Plugin/                 <- git repository root (development files)
-├── contour_generator/              <- THE QGIS PLUGIN (only this folder ships to users)
+├── contour_flow/              <- THE QGIS PLUGIN (only this folder ships to users)
 │   ├── __init__.py                 classFactory(): QGIS entry point
 │   ├── metadata.txt                plugin metadata read by QGIS and plugins.qgis.org
 │   ├── LICENSE                     copy of the GPLv2 text (required inside the plugin ZIP)
-│   ├── contour_generator.py        plugin lifecycle: initGui() / unload()
+│   ├── contour_flow.py        plugin lifecycle: initGui() / unload()
 │   ├── icons/contour.svg           toolbar/menu icon (temporary, original artwork)
 │   ├── ui/
 │   │   ├── contour_dialog.py       dialog behaviour: visibility, live checks, summary, run
@@ -46,8 +46,8 @@ unit-tested with ordinary Python outside QGIS.
 ### Why the plugin lives in a subfolder
 
 1. **QGIS loads the folder as a Python package.** The folder name becomes the
-   import name, so it must be a valid identifier (`contour_generator`).
-2. **Clean development link.** Only `contour_generator/` is linked into QGIS,
+   import name, so it must be a valid identifier (`contour_flow`).
+2. **Clean development link.** Only `contour_flow/` is linked into QGIS,
    so `.git/`, `tests/` and the docs never appear in the QGIS profile.
 3. **Clean ZIP.** The release ZIP must contain one top-level plugin folder
    and no development or generated files.
@@ -60,7 +60,7 @@ plugins.qgis.org inside the package.
 ```
 QGIS ── classFactory(iface)
  ▼
-contour_generator.py   lifecycle: one QAction (toolbar + Plugins menu), single dialog instance
+contour_flow.py   lifecycle: one QAction (toolbar + Plugins menu), single dialog instance
  ▼
 ui/contour_dialog.py   widgets -> ContourRequest; visibility; live checks; summary; progress
  ▼
@@ -76,10 +76,10 @@ Dependencies point **downwards** only. `core` never imports `ui`. The
 workflow never adds layers to the project; the dialog does, so the engine
 can also be used from the Python console or a future Processing provider.
 
-### Plugin lifecycle: `contour_generator.py`
+### Plugin lifecycle: `contour_flow.py`
 
 `initGui()` creates one action, added to the Plugins toolbar and to
-**Plugins ▸ Contour Generator**. `show_dialog()` creates the dialog once and
+**Plugins ▸ Contour Flow**. `show_dialog()` creates the dialog once and
 re-raises it afterwards. `unload()` undoes everything: it calls
 `dialog.cleanup()`, closes and deletes the dialog, removes the menu entry and
 toolbar icon, disconnects the action and deletes it.
@@ -182,7 +182,7 @@ outputs remain.
 - An ordered list of `(label, value)` settings plus warnings.
 - Written once per layer: as text to the metadata abstract (with the
   professional-review disclaimer), and as JSON in the custom property
-  `contour_generator/metadata`.
+  `contour_flow/metadata`.
 - Features carry only `value` and `is_major`.
 
 ### Errors
