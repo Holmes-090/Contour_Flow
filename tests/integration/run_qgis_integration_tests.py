@@ -855,7 +855,7 @@ def t_sample_data(ctx):
     from qgis.core import QgsProject
 
     project = QgsProject()  # a separate instance, so the global project is untouched
-    check(project.read(os.path.join(folder, "contour_flow_sample.qgz")), f"sample project did not open: {project.error()}")
+    check(project.read(os.path.join(folder, "contour_flow_sample.qgs")), f"sample project did not open: {project.error()}")
     order = [node.name() for node in project.layerTreeRoot().children()]  # top to bottom
     check(order == ["sample_wells", "site_boundary", "sample_dem"], f"sample project layer order {order}")
     check(all(layer.isValid() for layer in project.mapLayers().values()), "sample project has broken layers")
@@ -877,7 +877,7 @@ def t_desktop_sequence(ctx):
     from contour_flow.core import options as opt
 
     project = QgsProject.instance()
-    qgz = os.path.join(REPO, "sample_data", "contour_flow_sample.qgz")
+    qgz = os.path.join(REPO, "sample_data", "contour_flow_sample.qgs")
     for round_ in range(3):
         ctx.stage = f"round {round_ + 1}: open project"
         check(project.read(qgz), f"could not open {qgz}: {project.error()}")

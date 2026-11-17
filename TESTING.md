@@ -122,7 +122,7 @@ the sample point and raster workflows, and unload. Details are in
 Only what automation cannot judge. About 5 minutes in QGIS 3.44, with the
 plugin installed from the release ZIP or the development link.
 
-Open `sample_data/contour_flow_sample.qgz`, open **Contour Flow**, and run
+Open `sample_data/contour_flow_sample.qgs`, open **Contour Flow**, and run
 sample Test 1 (see `sample_data/README.md`). Then check:
 
 1. The dialog layout is clean and understandable; nothing is cut off.

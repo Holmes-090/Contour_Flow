@@ -1,132 +1,94 @@
 # Contour Flow
 
-Contour Flow is an open-source QGIS plugin for generating editable contour
-lines from point elevations and raster surfaces using native QGIS and GDAL
-processing tools.
+**Make editable contour lines in QGIS from point measurements or an elevation
+raster, in a few clicks.**
 
-**Point or raster data in → editable contour lines out.** That is all it does.
+Contour Flow is a free, open-source QGIS plugin. Choose a point layer with a
+number field (such as groundwater levels or survey elevations) or a DEM, and
+it draws clean, labelled contour lines that you can edit and save like any
+other layer.
 
-*Version 0.1.0, first release candidate (experimental). Tested on QGIS 3.44 LTR.*
+![Groundwater contours made with Contour Flow](docs/images/groundwater_contours.png)
 
-![Contour Flow dialog](docs/images/dialog.png)
-![Groundwater contours from the sample data](docs/images/groundwater_contours.png)
+## What you can do with it
 
-> **Important interpretation note.** Interpolated contours are estimates
-> derived from the supplied data. Results should be reviewed by an
-> appropriately qualified user before technical or professional use.
+- **Contour point data:** turn well, borehole or survey points into contours of
+  groundwater level, ground surface, bedrock, or any other measured value.
+- **Contour a DEM:** draw contour lines from an elevation raster.
+- **Clip to your site:** keep only the contours inside a boundary polygon.
+- **Get readable maps straight away:** major and minor contours, labels, and a
+  choice of styles (Neutral, Topographic, Groundwater).
+- **Edit and keep the results:** the output is a normal QGIS line layer. Move
+  lines, change the style, or save it to a GeoPackage.
 
-## Features
+It uses QGIS's own interpolation and contouring tools, so there is nothing
+extra to install.
 
-- **Point-to-contour workflow:** any numeric field of a point layer
-  (all features or only the selected ones).
-- **Raster/DEM contour workflow:** any band of a file-based raster.
-- **Interpolation methods:** TIN Linear, TIN Clough–Tocher and IDW. All are
-  QGIS's own algorithms; none of the mathematics is reimplemented.
-- **Automatic contour interval:** a clean 1, 2, 2.5 or 5 × 10ⁿ interval for
-  an approximate number of contours. Or a **fixed interval**.
-- **Clipping:** exact clipping to a polygon boundary, in any CRS.
-- **Smoothing:** optional, with presets. The source values are untouched.
-- **Major and minor contours:** major contours land on round numbers by
-  default.
-- **Labels:** off, major only, or all, using native QGIS labelling.
-- **Style presets:** Neutral, Topographic, Groundwater. Ordinary QGIS styles
-  you can change.
-- **Editable vector output:** ordinary QGIS line layers with fields `value`
-  and `is_major`.
-- **GeoPackage output:** never overwrites existing layers.
-- **GeoTIFF surface output:** keep the interpolated surface, optionally.
-- **Transparent:** a live summary before you run, and every setting stored in
-  the layer metadata.
+## Getting started
 
-## Typical uses
+1. In QGIS, open **Plugins ▸ Manage and Install Plugins**, search for
+   **Contour Flow**, and click **Install**.
+   (While the plugin is marked *experimental*, tick *Show also experimental
+   plugins* in the Plugin Manager's **Settings** tab first.)
+2. Add your point layer or DEM to the map.
+3. Click the **Contour Flow** toolbar button, or use **Plugins ▸ Contour Flow**.
+4. Choose your layer (and, for points, the value field). Optionally pick a
+   boundary to clip to.
+5. Click **Generate Contours**.
 
-Groundwater elevation contours, ground-surface elevation, bedrock elevation,
-survey point elevations, DEM contours, and other numeric spatial surfaces
-(concentrations, thicknesses and so on). The value field can be anything
-numeric; the plugin makes no assumption about what it represents.
+That's it. The new contour layer appears in your project. It is a temporary
+layer, so to keep it, right-click it and choose **Make Permanent**, or set
+**Save as: GeoPackage** before you generate.
 
-## Quick start
+<img src="docs/images/dialog.png" alt="The Contour Flow window" width="360">
 
-1. Install the plugin (see [Installation](#installation)) and add your data to QGIS.
-2. Open **Contour Flow** from the toolbar or **Plugins ▸ Contour Flow**.
-3. Choose **Point layer** (and its value field) or **Raster**.
-4. Optionally choose a boundary polygon to clip to.
-5. Keep **Interval: Automatic**, or set a fixed interval. Pick labels and a style.
-6. Check the **Summary**, then click **Generate Contours**.
+## Tips
 
-The result is a temporary layer. Save it (right-click ▸ *Make Permanent*), or
-choose **Save as: GeoPackage** before running. Technical options (method,
-cell size, extent, duplicates, smoothing, major frequency, surface output)
-are under **Advanced settings**. Their defaults suit most data.
+- **Interval:** *Automatic* picks a tidy contour spacing for you. Switch to
+  *Fixed* to set your own, for example every 0.5 m.
+- **Summary:** the Summary box shows what will happen (number of points,
+  value range, contour interval) before you click Generate.
+- **Advanced settings:** open this section to choose the interpolation method,
+  the cell size, smoothing and more. The defaults work well for most data.
+- **Selected features only:** contour just the points you have selected on the map.
+- **Your settings travel with the result:** every contour layer records how it
+  was made, in **Layer Properties ▸ Metadata**.
 
-## Sample data
+## Try it with the sample data
 
-[`sample_data/`](sample_data/README.md) contains a fictional well dataset
-(groundwater, ground-surface and bedrock elevations), a site boundary, a small
-DEM, and a ready-made QGIS project, `contour_flow_sample.qgz`. Its README
-walks through three five-minute tests.
+The [`sample_data`](sample_data/README.md) folder has a small, fictional
+example: 13 wells, a site boundary and a DEM. Open
+`contour_flow_sample.qgs` in QGIS and follow the three short tests in its README.
 
-![DEM contours from the sample data](docs/images/dem_contours.png)
+![Contours from the sample DEM](docs/images/dem_contours.png)
 
-## Interpolation methods
+## A note on accuracy
 
-| Method | How it works | Notes |
-|---|---|---|
-| **TIN Linear** (default) | Triangulates the points and interpolates linearly within each triangle. | Honest and reproducible. Values never exceed the data range. No values outside the points' convex hull. |
-| **TIN Clough–Tocher** | A smoother (cubic) surface on the same triangulation. | Smoother contours. May slightly over- or undershoot the data. |
-| **IDW** | Inverse distance weighting: nearby points have more influence (power 2 by default). | Fills the whole extent, so it **extrapolates** beyond the measured points; the plugin warns when that happens. It can produce "bull's-eyes" around points. |
+Contours drawn from points are **estimates**. Between and beyond your
+measurements, the plugin can only interpolate what the data suggests. Results
+should be reviewed by an appropriately qualified person before being used for
+technical or professional decisions.
 
-No method adds information that is not in the data. Sparse or clustered
-points give uncertain contours whatever the method.
+## Requirements
 
-## Installation
+- QGIS 3.44 (LTR) or newer 3.x
+- The **Processing** plugin enabled (it is on by default)
+- Tested on Windows. It uses only tools built into QGIS, so it should also run
+  on macOS and Linux. Please report any problems there.
 
-**From a release ZIP:**
+## Help and feedback
 
-1. Download `contour-flow-<version>.zip`.
-2. In QGIS: **Plugins ▸ Manage and Install Plugins ▸ Install from ZIP**, then
-   choose the file and click *Install Plugin*.
-3. The plugin is marked *experimental*. If it is not listed, enable
-   *Settings ▸ Show also experimental plugins* in the Plugin Manager.
+Found a problem or have a suggestion? Please open an issue at
+<https://github.com/Holmes-090/Contour_Flow/issues>. It helps to include your
+QGIS version, and any messages from **View ▸ Panels ▸ Log Messages ▸ Contour Flow**.
 
-**For development:** link the repository's `contour_flow/` folder into your
-QGIS profile. See [DEVELOPMENT.md](DEVELOPMENT.md).
+## For developers
 
-**Requirements:** QGIS **3.44 LTR**. The core **Processing** plugin must be
-enabled (it is by default). There are no other dependencies.
-
-## Testing
-
-| Level | What | Command |
-|---|---|---|
-| Unit tests | Pure-Python logic (intervals, validation, options, metadata) | `python -m unittest discover -s tests -t .` |
-| Real-QGIS integration tests | The real plugin running real QGIS/GDAL processing on fixtures with known answers, plus the sample data, the dialog and plugin loading | `tests\integration\run_qgis_integration_tests.bat` |
-| Package test | Builds the release ZIP, validates it, installs it into an isolated QGIS profile and runs it | `scripts\run_with_qgis.bat scripts\package_plugin.py` |
-| Visual smoke test | A short manual checklist | [TESTING.md](TESTING.md) |
-
-Tested on **QGIS 3.44.15 LTR** (GDAL 3.13.3, Windows 11). QGIS 4 is not tested,
-and no QGIS 4 compatibility is claimed.
-
-## Current limitations
-
-- Processing runs in the QGIS main thread. A progress dialog with **Cancel**
-  is shown, but other QGIS work waits until the run finishes.
-- Contour levels are multiples of the interval (no base offset).
-- Only exact duplicate coordinates are detected, not points that are merely
-  close together.
-- Only file-based (GDAL) rasters can be contoured.
-
-## Contributing and issues
-
-Please report problems at
-<https://github.com/Holmes-090/Contour_Flow/issues>. Include the QGIS
-version and the plugin's log: **View ▸ Panels ▸ Log Messages ▸ Contour Flow**.
-
-Architecture and development notes: [ARCHITECTURE.md](ARCHITECTURE.md),
-[DEVELOPMENT.md](DEVELOPMENT.md), [CHANGELOG.md](CHANGELOG.md).
+How the plugin is built and tested: [ARCHITECTURE.md](ARCHITECTURE.md),
+[DEVELOPMENT.md](DEVELOPMENT.md), [TESTING.md](TESTING.md),
+[CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-Contour Flow is free software, licensed under the **GNU General Public
-License, version 2 or (at your option) any later version**
-(`GPL-2.0-or-later`). See [LICENSE](LICENSE). This matches QGIS's own license.
+Contour Flow is free software under the GNU General Public License v2 or later
+(GPL-2.0-or-later). See [LICENSE](LICENSE).

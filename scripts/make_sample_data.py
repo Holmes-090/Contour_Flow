@@ -10,13 +10,16 @@ Creates (overwriting previous versions):
 * ``sample_data/contour_flow_sample.gpkg`` with layers ``sample_wells`` and
   ``site_boundary``;
 * ``sample_data/sample_dem.tif``;
-* ``sample_data/contour_flow_sample.qgz``, a project with all three loaded.
+* ``sample_data/contour_flow_sample.qgs``, a project with all three loaded (plain
+  XML ``.qgs``, not zipped ``.qgz``: the QGIS plugin repository does not allow
+  zipped files in a plugin's source repository).
 
 All data is fictional and generated from the formulas below (EPSG:32633,
 UTM 33N, local offsets in metres from X0, Y0).
 """
 
 import math
+import re
 import os
 import struct
 import sys
@@ -181,20 +184,34 @@ def make_project(gpkg, dem, path):
     if not project.write(path):
         raise RuntimeError(f"Could not write {path}: {project.error()}")
     project.clear()
+    # Saving a .qgs also writes an (empty) "<name>_attachments.zip". The project
+    # has no attachments, and the repository must not contain zipped files.
+    attachments = os.path.splitext(path)[0] + "_attachments.zip"
+    if os.path.exists(attachments):
+        os.remove(attachments)
+    # QGIS stamps the OS account and the default metadata author into the
+    # project. This is a public sample file, so replace them with neutral values.
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+    text = re.sub(r'saveUser="[^"]*"', 'saveUser=""', text)
+    text = re.sub(r'saveUserFull="[^"]*"', 'saveUserFull=""', text)
+    text = re.sub(r"<author>[^<]*</author>", "<author>Contour Flow sample data</author>", text)
+    with open(path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
 
 
 def main():
     os.makedirs(OUT, exist_ok=True)
     gpkg = os.path.join(OUT, "contour_flow_sample.gpkg")
     dem = os.path.join(OUT, "sample_dem.tif")
-    qgz = os.path.join(OUT, "contour_flow_sample.qgz")
-    for path in (gpkg, qgz):
+    qgs = os.path.join(OUT, "contour_flow_sample.qgs")
+    for path in (gpkg, qgs, os.path.join(OUT, "contour_flow_sample.qgz")):
         if os.path.exists(path):
             os.remove(path)
     write_layer(make_wells(), gpkg, "sample_wells")
     write_layer(make_boundary(), gpkg, "site_boundary")
     make_dem(dem)
-    make_project(gpkg, dem, qgz)
+    make_project(gpkg, dem, qgs)
     for name in sorted(os.listdir(OUT)):
         print(f"  {name}  {os.path.getsize(os.path.join(OUT, name)):,} bytes")
 

@@ -56,7 +56,7 @@ def main():
 
     os.makedirs(OUT, exist_ok=True)
     project = QgsProject.instance()
-    if not project.read(os.path.join(REPO, "sample_data", "contour_flow_sample.qgz")):
+    if not project.read(os.path.join(REPO, "sample_data", "contour_flow_sample.qgs")):
         raise RuntimeError(project.error())
     layers = {layer.name(): layer for layer in project.mapLayers().values()}
     wells, site, dem = layers["sample_wells"], layers["site_boundary"], layers["sample_dem"]

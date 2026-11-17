@@ -264,7 +264,7 @@ ok("one toolbar action 'Contour Flow' with icon", len(actions) == 1 and actions[
 ok("Plugins menu entry", iface.submenu("Contour Flow") is not None)
 
 project = QgsProject.instance()
-ok("sample project opens", project.read(os.path.join(repo, "sample_data", "contour_flow_sample.qgz")))
+ok("sample project opens", project.read(os.path.join(repo, "sample_data", "contour_flow_sample.qgs")))
 layers = {l.name(): l for l in project.mapLayers().values()}
 plugin.show_dialog()
 dialog = plugin.dialog

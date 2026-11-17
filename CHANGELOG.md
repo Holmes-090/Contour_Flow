@@ -6,7 +6,15 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Nothing yet.
+Repository changes for publishing; the plugin package is unchanged.
+
+- The README is rewritten for QGIS users: what the plugin does, how to
+  install and use it, tips, the sample data and an accuracy note. Developer
+  details stay in the other documents.
+- The sample project is now `sample_data/contour_flow_sample.qgs` (plain XML).
+  It replaces the `.qgz` (a zip archive), because the QGIS plugin repository
+  does not allow zipped files in a plugin's source repository. The generator
+  also strips the OS account name and author from the saved project.
 
 ## [0.1.0] - 2026-11-13 (first release candidate)
 
