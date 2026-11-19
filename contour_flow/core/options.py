@@ -113,6 +113,44 @@ SMOOTH_MAX_ITERATIONS = 5
 SMOOTH_MAX_OFFSET = 0.5
 
 
+#: Groundwater Mode smoothing, scale-aware:
+#: ``(iterations, offset, simplify tolerance in cells, max segment length in cells)``.
+#:
+#: Contour lines from GDAL have a vertex in every grid cell, so Chaikin
+#: smoothing alone only rounds cell-sized stair steps. The groundwater
+#: pipeline therefore (1) simplifies with Douglas-Peucker at about one cell,
+#: which removes that vertex noise while staying within one cell of the line;
+#: (2) densifies so no segment is longer than a few cells, which bounds how far
+#: corner cutting can move a line (about half a segment at a sharp kink);
+#: (3) applies Chaikin corner cutting. Results are checked for invalid
+#: geometries and for crossings of different levels; if any are found the
+#: next milder step is used (see ``groundwater_smoothing_fallbacks``).
+GW_SMOOTH_PRESETS = {SMOOTH_LIGHT: (3, 0.25, 1.0, 6.0), SMOOTH_MEDIUM: (3, 0.25, 1.5, 16.0)}
+GW_CUSTOM_SIMPLIFY_CELLS = 1.0
+GW_CUSTOM_SEGMENT_CELLS = 6.0
+
+
+def groundwater_smoothing_parameters(mode, iterations=1, offset=0.25):
+    """Like ``smoothing_parameters`` but scale-aware: adds simplify and segment lengths (cells)."""
+    if mode in GW_SMOOTH_PRESETS:
+        return GW_SMOOTH_PRESETS[mode], None
+    params, problem = smoothing_parameters(mode, iterations, offset)
+    if params is None:
+        return None, problem
+    return (params[0], params[1], GW_CUSTOM_SIMPLIFY_CELLS, GW_CUSTOM_SEGMENT_CELLS), None
+
+
+def groundwater_smoothing_fallbacks(params):
+    """The chosen settings followed by progressively milder ones (never empty)."""
+    iterations, offset, simplify, segment = params
+    steps = [params, (iterations, offset, simplify, segment / 2), (1, offset, simplify / 2, segment / 4)]
+    unique = []
+    for step in steps:
+        if step not in unique:
+            unique.append(step)
+    return unique
+
+
 def smoothing_parameters(mode, iterations=1, offset=0.25):
     """Return ``((iterations, offset) or None, problem)`` for a smoothing mode."""
     if mode == SMOOTH_NONE:

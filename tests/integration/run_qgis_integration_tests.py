@@ -822,7 +822,8 @@ def t_sample_data(ctx):
     site = vector(f"{gpkg}|layername=site_boundary", "site_boundary")
     dem = raster(os.path.join(folder, "sample_dem.tif"), "sample_dem")
     names = wells.fields().names()
-    check(wells.featureCount() == 13 and names[-4:] == ["well_id", "gw_elev", "ground_elev", "bedrock_elev"],
+    check(wells.featureCount() == 13 and names[-7:] == ["well_id", "gw_elev", "ground_elev", "bedrock_elev",
+                                                       "mp_elev", "dtw", "wl_text"],
           f"sample_wells has {wells.featureCount()} features, fields {names}")
     site_polygon = next(site.getFeatures()).geometry()
 
@@ -851,6 +852,31 @@ def t_sample_data(ctx):
     check(5 <= len(levels) <= 20, f"DEM levels {levels}")
     results["dem"] = (result.interval, len(levels), result.contour_layer.featureCount(), result.warnings)
 
+    ctx.stage = "sample test 4: Groundwater Mode"
+    from contour_flow.core import groundwater as gw
+    from contour_flow.core.workflow import plan_contours
+
+    result = run(request(mode=gw.MODE_GROUNDWATER, point_layer=wells, value_field="gw_elev", boundary_layer=site,
+                         smoothing_mode=opt.SMOOTH_LIGHT, flow_arrows=True, style_preset=opt.STYLE_GROUNDWATER))
+    arrows = result.arrow_layer
+    check(arrows is not None and 6 <= arrows.featureCount() <= 15, "sample: expected about ten arrows")
+    check(all(20 <= f["azimuth"] <= 100 for f in arrows.getFeatures()), "sample: arrows should point north-east")
+    check(any(line.startswith("General groundwater flow direction: northeast") for line in result.summary),
+          f"sample: summary {result.summary}")
+    check(not any(w.startswith("IMPORTANT:") for w in result.warnings), f"sample GW: unexpected {result.warnings}")
+    plan = plan_contours(request(mode=gw.MODE_GROUNDWATER, point_layer=wells, gw_value_method=gw.GW_CALCULATED,
+                                 mp_field="mp_elev", dtw_field="dtw", ground_field="ground_elev"))
+    stats = plan.head_stats
+    check((stats.usable, stats.null) == (12, 1), f"sample calculated: usable/null {stats.usable}/{stats.null}")
+    mw12 = next(f.geometry().asPoint() for f in wells.getFeatures() if f["well_id"] == "MW-12")
+    outliers = [w for w in plan.warnings if w.startswith("IMPORTANT:") and "trend" in w]
+    check(len(outliers) == 1 and f"({mw12.x():.10g}, {mw12.y():.10g})" in outliers[0],
+          f"sample calculated: MW-12 not flagged alone: {plan.warnings}")
+    plan = plan_contours(request(mode=gw.MODE_GROUNDWATER, point_layer=wells, value_field="wl_text"))
+    check((plan.head_stats.usable, plan.head_stats.non_numeric) == (11, 2), "sample wl_text: 11 usable, 2 text")
+    results["groundwater mode"] = (result.interval, len(set(values(result.contour_layer))),
+                                   arrows.featureCount(), result.warnings)
+
     ctx.stage = "sample project"
     from qgis.core import QgsProject
 
@@ -860,7 +886,7 @@ def t_sample_data(ctx):
     check(order == ["sample_wells", "site_boundary", "sample_dem"], f"sample project layer order {order}")
     check(all(layer.isValid() for layer in project.mapLayers().values()), "sample project has broken layers")
     project.clear()
-    ctx.note("; ".join(f"{k}: interval {v[0]:g}, {v[1]} levels, {v[2]} lines" for k, v in results.items()))
+    ctx.note("; ".join(f"{k}: interval {v[0]:g}, {v[1]} levels, {v[2]} lines/arrows" for k, v in results.items()))
 
 
 @test("Desktop sequence: contour project layers, reopen project")
@@ -920,6 +946,329 @@ def t_profile_discovery(ctx):
 
 
 # ----------------------------------------------------------------- runner
+
+
+# ------------------------------------------------------- Groundwater Mode
+
+
+def gw_layer(ctx, key="gw_wells"):
+    return vector(ctx.sources[key], key)
+
+
+def gw_request(ctx, key="gw_wells", **kwargs):
+    from contour_flow.core import groundwater as gw
+
+    base = dict(mode=gw.MODE_GROUNDWATER, point_layer=gw_layer(ctx, key), value_field="head")
+    base.update(kwargs)
+    return request(**base)
+
+
+def gw_hull(ctx):
+    from qgis.core import QgsGeometry, QgsPointXY
+
+    from fixtures import GW_WELLS, X0, Y0
+
+    return QgsGeometry.fromMultiPointXY([QgsPointXY(X0 + dx, Y0 + dy) for _i, dx, dy in GW_WELLS]).convexHull()
+
+
+def metadata_dict(layer):
+    from contour_flow.core.report import METADATA_PROPERTY, parse_metadata_json
+
+    items, _warnings = parse_metadata_json(layer.customProperty(METADATA_PROPERTY))
+    return dict(items)
+
+
+def check_arrows(ctx, result, support, label):
+    from fixtures import GW_AZIMUTH, GW_GRADIENT
+
+    arrows = result.arrow_layer
+    check(arrows is not None, f"{label}: no arrow layer")
+    check(arrows.name() == "GW Flow Direction", f"{label}: arrow layer name {arrows.name()!r}")
+    check(arrows.fields().names() == ["azimuth", "gradient", "head"], f"{label}: fields {arrows.fields().names()}")
+    items = features(arrows)
+    check(3 <= len(items) <= 30, f"{label}: {len(items)} arrows (expected a sparse set)")
+    grown = support.buffer(1e-6, 4)
+    for feature in items:
+        check(abs(feature["azimuth"] - GW_AZIMUTH) < 1.0, f"{label}: azimuth {feature['azimuth']} is not south-east")
+        check(abs(feature["gradient"] - GW_GRADIENT) / GW_GRADIENT < 0.02, f"{label}: gradient {feature['gradient']}")
+        line = feature.geometry().asPolyline()
+        dx, dy = line[-1].x() - line[0].x(), line[-1].y() - line[0].y()
+        check(dx > 0 and dy < 0, f"{label}: arrow drawn towards ({dx:.1f}, {dy:.1f}), not south-east")
+        check(grown.contains(feature.geometry()), f"{label}: arrow {feature.id()} outside the supported area")
+    check(arrows.renderer().symbol().symbolLayer(0).layerType() == "ArrowLine", f"{label}: not an arrow symbol")
+    return items
+
+
+@test("GW existing field: contours, smoothing, flow arrows point south-east")
+def t_gw_existing(ctx):
+    from contour_flow.core import groundwater as gw
+    from contour_flow.core import options as opt
+    from contour_flow.core.flow import FLOW_METHOD
+    from contour_flow.core.smoothing import geometry_problems
+    from fixtures import GW_VALID
+
+    layer = gw_layer(ctx)
+    before = [f.attributes() for f in layer.getFeatures()]
+    fields_before = layer.fields().names()
+    ctx.stage = "run"
+    req = gw_request(ctx, smoothing_mode=opt.SMOOTH_LIGHT, keep_unsmoothed=True, flow_arrows=True,
+                     style_preset=opt.STYLE_GROUNDWATER, surface_mode=opt.SURFACE_TEMPORARY)
+    req.point_layer = layer
+    result = run(req)
+
+    ctx.stage = "layers and names"
+    contours = result.contour_layer
+    check(contours.name() == "GW Contours", f"contour name {contours.name()!r}")
+    check([l.name() for l in result.extra_layers] == ["GW Contours - Unsmoothed"],
+          f"extra layers {[l.name() for l in result.extra_layers]}")
+    check(result.surface_layer is not None and result.surface_layer.name().startswith("GW Surface"),
+          f"surface {result.surface_layer and result.surface_layer.name()}")
+    check([f.attributes() for f in layer.getFeatures()] == before, "the source layer was changed")
+    check(layer.fields().names() == fields_before and not layer.isModified(), "the source layer's fields changed")
+
+    ctx.stage = "contours and smoothing"
+    unsmoothed = result.extra_layers[0]
+    smoothed_values = sorted(set(values(contours)))
+    check(smoothed_values == sorted(set(values(unsmoothed))), "smoothing changed the contour values")
+    check(all(is_multiple(v, result.interval) for v in smoothed_values), "contours not on the interval")
+    invalid, crossings = geometry_problems(contours)
+    check(invalid == 0 and crossings == 0, f"smoothed geometry: {invalid} invalid, {crossings} crossings")
+    by_value = {}
+    for f in unsmoothed.getFeatures():
+        by_value.setdefault(f["value"], []).append(f.geometry())
+    cell = metadata_dict(contours).get("Cell size")
+    cell = float(cell) if cell else 1.0
+    worst = 0.0
+    for value, x, y in vertices(contours):
+        from qgis.core import QgsGeometry, QgsPointXY
+
+        point = QgsGeometry.fromPointXY(QgsPointXY(x, y))
+        worst = max(worst, min(g.distance(point) for g in by_value[value]))
+    check(worst <= 2.0 * cell, f"smoothing moved a vertex {worst:.3f} (> 2 cells of {cell})")
+    meta = metadata_dict(contours)
+    check("Douglas-Peucker" in str(meta.get("Smoothing applied")), f"smoothing method {meta.get('Smoothing applied')}")
+    recorded = meta.get("Maximum smoothing displacement")
+    check(isinstance(recorded, float) and recorded <= 2.0 * cell, f"recorded displacement {recorded}")
+    check("does not increase accuracy" in str(meta.get("Smoothing note")), "smoothing note missing")
+
+    ctx.stage = "flow arrows"
+    arrows = check_arrows(ctx, result, gw_hull(ctx), "hull")
+    text = "\n".join(result.summary)
+    check("General groundwater flow direction: southeast / approximately 135" in text, f"summary:\n{text}")
+    check("Hydraulic gradient: median 0.014" in text, f"gradient summary:\n{text}")
+    check("velocity" not in text.lower() and "darcy" not in text.lower(), "summary reports velocity/flux")
+
+    ctx.stage = "metadata"
+    meta = metadata_dict(result.arrow_layer)
+    check(meta.get("Flow-direction method") == FLOW_METHOD, "flow method missing from arrow metadata")
+    check(meta.get("Interpretation note") == gw.DISCLAIMER, "disclaimer missing")
+    check(metadata_dict(contours).get("Valid groundwater elevations") == GW_VALID, "valid count in metadata")
+    check("Plugin version" in " ".join(metadata_dict(contours)), "plugin version missing")
+    check("interpretation" in contours.metadata().abstract().lower(), "abstract lacks the interpretation note")
+    ctx.note(f"{contours.featureCount()} smoothed contours (max shift {worst:.2f} m, recorded {recorded:.2f}), "
+             f"{len(arrows)} arrows at 135 deg")
+
+
+@test("GW calculated head (MP elevation - depth to water)")
+def t_gw_calculated(ctx):
+    from contour_flow.core import groundwater as gw
+    from fixtures import GW_VALID
+
+    ctx.stage = "plan"
+    from contour_flow.core.workflow import plan_contours
+
+    req = gw_request(ctx, gw_value_method=gw.GW_CALCULATED, value_field="", mp_field="mp_elev", dtw_field="dtw",
+                     ground_field="ground", flow_arrows=True)
+    plan = plan_contours(req)
+    check(plan.ok, f"plan errors {plan.errors}")
+    check(plan.head_stats.usable == GW_VALID and plan.head_stats.null == 4,
+          f"usable {plan.head_stats.usable}, null {plan.head_stats.null}")
+    check(not any("above" in w for w in plan.warnings), f"unexpected head-above-ground warning: {plan.warnings}")
+    ctx.stage = "run"
+    result = run(req)
+    existing = run(gw_request(ctx, flow_arrows=True))
+    check(sorted(set(values(result.contour_layer))) == sorted(set(values(existing.contour_layer))),
+          "calculated heads give different contour levels than the head field")
+    check_arrows(ctx, result, gw_hull(ctx), "calculated")
+    source = metadata_dict(result.contour_layer).get("Groundwater elevation", "")
+    check(source.startswith("Calculated: 'mp_elev'") and "'dtw'" in source, f"metadata source {source!r}")
+    ctx.note(f"{GW_VALID} heads from mp_elev - dtw; same levels as the head field")
+
+    ctx.stage = "same field twice"
+    expect_error(ctx, gw_request(ctx, gw_value_method=gw.GW_CALCULATED, mp_field="mp_elev", dtw_field="mp_elev"),
+                 "must be different")
+
+
+@test("GW numeric text field (Dry, N/A, blank, padded numbers)")
+def t_gw_text(ctx):
+    from contour_flow.core.input_validation import TEXT_FIELD_NOTE, groundwater_field_choices
+    from contour_flow.core.workflow import plan_contours
+    from fixtures import GW_VALID
+
+    ctx.stage = "field choices"
+    choices = {name: (text, is_text) for name, text, is_text in groundwater_field_choices(gw_layer(ctx))}
+    check("wl_text" in choices and choices["wl_text"][1] and TEXT_FIELD_NOTE in choices["wl_text"][0],
+          f"wl_text not offered as numeric text: {choices}")
+    check("well_id" not in choices, "well_id offered as a groundwater field")
+    check(choices.get("head") == ("head", False), f"head choice {choices.get('head')}")
+
+    ctx.stage = "plan"
+    plan = plan_contours(gw_request(ctx, value_field="wl_text"))
+    check(plan.ok, f"plan errors {plan.errors}")
+    stats = plan.head_stats
+    check((stats.usable, stats.null, stats.non_numeric) == (GW_VALID, 2, 2),
+          f"usable/null/text {(stats.usable, stats.null, stats.non_numeric)}")
+    text = " ".join(plan.warnings)
+    check("'Dry'" in text and "'N/A'" in text, f"text values not reported: {plan.warnings}")
+    check(plan.value_min > 97, f"text treated as 0? minimum head {plan.value_min}")
+    check("Usable wells: 13" in plan.summary_lines() and "Skipped records: 4" in plan.summary_lines(),
+          f"summary {plan.summary_lines()}")
+
+    ctx.stage = "no numeric values"
+    expect_error(ctx, gw_request(ctx, value_field="well_id"), "no valid groundwater elevations")
+    ctx.note("wl_text offered with the numeric-text label; 13 used, 'Dry'/'N/A'/NULL/blank skipped and reported")
+
+
+@test("GW boundary in another CRS clips contours and arrows")
+def t_gw_boundary(ctx):
+    from contour_flow.core import groundwater as gw
+
+    boundary_layer = vector(ctx.sources["gw_boundary_wgs84"], "gw_boundary_wgs84")
+    check(boundary_layer.crs().authid() == "EPSG:4326", "boundary fixture should be WGS84")
+    boundary = boundary_in_utm(ctx, boundary_layer)
+    for support in (gw.ARROWS_HULL, gw.ARROWS_BOUNDARY):
+        ctx.stage = f"arrows: {support}"
+        result = run(gw_request(ctx, boundary_layer=boundary_layer, flow_arrows=True, arrow_support=support))
+        grown = boundary.buffer(0.01, 4)
+        outside = [f.id() for f in result.contour_layer.getFeatures() if not grown.contains(f.geometry())]
+        check(not outside, f"contours outside the boundary: {outside}")
+        check_arrows(ctx, result, boundary.intersection(gw_hull(ctx)), support)
+    ctx.note("WGS84 boundary transformed to UTM; contours and arrows inside it, still south-east")
+
+
+@test("GW QA warnings and errors")
+def t_gw_qa(ctx):
+    from contour_flow.core import groundwater as gw
+    from contour_flow.core import options as opt
+    from contour_flow.core.workflow import plan_contours
+    from fixtures import GW_ABOVE_GROUND_WELL, GW_NESTED_WELL, GW_OUTLIER_WELL
+
+    ctx.stage = "QA layer"
+    plan = plan_contours(gw_request(ctx, "gw_qa_wells", ground_field="ground"))
+    check(plan.ok, f"QA warnings must not stop the run: {plan.errors}")
+    important = [w for w in plan.warnings if w.startswith("IMPORTANT:")]
+    joined = "\n".join(important)
+    check("nested wells" in joined, f"duplicate/nested-well warning missing:\n{joined}")
+    check("above" in joined and "artesian" in joined, f"head-above-ground warning missing:\n{joined}")
+    check("trend" in joined.lower(), f"outlier warning missing:\n{joined}")
+    layer = gw_layer(ctx, "gw_qa_wells")
+    fids = {f["well_id"]: f.id() for f in layer.getFeatures()}
+    check(f"feature {fids[f'MW-{GW_ABOVE_GROUND_WELL}']}" in joined, "head-above-ground warning names the wrong well")
+    ctx.note(f"{len(important)} important warnings (nested MW-{GW_NESTED_WELL}, above ground "
+             f"MW-{GW_ABOVE_GROUND_WELL}, off-trend MW-{GW_OUTLIER_WELL}); run still allowed")
+
+    ctx.stage = "fewer than 3 wells"
+    layer = gw_layer(ctx)
+    layer.selectByIds([f.id() for f in layer.getFeatures()][:2])
+    req = gw_request(ctx, selected_only=True)
+    req.point_layer = layer
+    expect_error(ctx, req, "3")
+
+    ctx.stage = "raster source"
+    expect_error(ctx, gw_request(ctx, source_type="raster", raster_layer=ctx.raster), "point layers")
+
+    ctx.stage = "arrows beyond the wells"
+    for method, fragment in ((opt.METHOD_IDW, "IDW extrapolates"), (opt.METHOD_TIN_LINEAR, "no arrows are drawn")):
+        plan = plan_contours(gw_request(ctx, method=method, flow_arrows=True, arrow_support=gw.ARROWS_EXTENT,
+                                        extent_mode=opt.EXTENT_BUFFERED_HULL, buffer_distance=40.0))
+        check(any(w.startswith("IMPORTANT:") and fragment in w for w in plan.warnings),
+              f"{method}: no warning about arrows outside the network: {plan.warnings}")
+    result = run(gw_request(ctx, method=opt.METHOD_TIN_LINEAR, flow_arrows=True, arrow_support=gw.ARROWS_EXTENT,
+                            extent_mode=opt.EXTENT_BUFFERED_HULL, buffer_distance=40.0))
+    hull = gw_hull(ctx).buffer(1e-6, 4)
+    check(all(hull.contains(f.geometry()) for f in result.arrow_layer.getFeatures()),
+          "TIN arrows were drawn outside the well network")
+
+    ctx.stage = "geographic CRS warning"
+    from qgis.core import QgsCoordinateReferenceSystem
+
+    geographic = gw_layer(ctx)
+    geographic.setCrs(QgsCoordinateReferenceSystem("EPSG:4326"))
+    plan = plan_contours(gw_request(ctx, point_layer=geographic))
+    check(any("geographic" in w.lower() for w in plan.warnings), f"no geographic CRS warning: {plan.warnings}")
+
+
+@test("GW dialog: mode switch, fields, defaults, summary")
+def t_gw_dialog(ctx):
+    from qgis.core import QgsProject
+
+    from contour_flow.core import groundwater as gw
+    from contour_flow.core import options as opt
+    from contour_flow.ui import contour_dialog as cd
+
+    project = QgsProject.instance()
+    project.removeAllMapLayers()
+    project.addMapLayers([gw_layer(ctx)])
+    dialog = cd.ContourDialog()
+    dialog.show()
+
+    def shown(widget):
+        return not widget.isHidden()
+
+    ctx.stage = "General by default"
+    check(dialog.mode_combo.currentData() == gw.MODE_GENERAL, "dialog does not start in General mode")
+    check(not shown(dialog.gw_input_widget) and not shown(dialog.gw_group), "groundwater controls in General")
+    check(shown(dialog.value_field_combo) and shown(dialog.source_widget), "General controls hidden")
+    general_style = dialog.style_combo.currentData()
+
+    ctx.stage = "switch to Groundwater"
+    dialog.mode_combo.setCurrentIndex(dialog.mode_combo.findData(gw.MODE_GROUNDWATER))
+    check(shown(dialog.gw_input_widget) and shown(dialog.gw_group) and shown(dialog.advanced_gw_group),
+          "groundwater controls hidden")
+    check(not shown(dialog.value_field_combo) and not shown(dialog.source_widget), "General field still shown")
+    check(dialog.style_combo.currentData() == opt.STYLE_GROUNDWATER, "style not set to Groundwater")
+    check(dialog.smoothing_combo.currentData() == opt.SMOOTH_LIGHT, "smoothing not Light")
+    check(not dialog.flow_arrows_check.isChecked(), "flow arrows should be off by default")
+    items = [dialog.gw_head_combo.itemText(i) for i in range(dialog.gw_head_combo.count())]
+    check(any(t.startswith("wl_text — text field") for t in items), f"head choices {items}")
+    check(dialog.gw_head_combo.currentData() == "head", f"preselected head {dialog.gw_head_combo.currentData()}")
+    check(dialog.gw_mp_combo.currentData() == "mp_elev" and dialog.gw_dtw_combo.currentData() == "dtw",
+          f"preselected MP/DTW {dialog.gw_mp_combo.currentData()}/{dialog.gw_dtw_combo.currentData()}")
+    check(dialog.gw_ground_combo.currentData() == "ground", f"ground {dialog.gw_ground_combo.currentData()}")
+
+    ctx.stage = "summary and counts"
+    dialog._refresh_summary()
+    summary = dialog.summary_label.text()
+    check("Usable wells: <b>13</b>" in summary, f"summary {summary}")
+    check(dialog.gw_count_label.text() == "13 usable groundwater elevations / 4 skipped",
+          f"count label {dialog.gw_count_label.text()!r}")
+
+    ctx.stage = "calculated, arrows"
+    dialog.gw_method_combo.setCurrentIndex(dialog.gw_method_combo.findData(gw.GW_CALCULATED))
+    check(shown(dialog.gw_mp_combo) and not shown(dialog.gw_head_combo), "calculated fields not shown")
+    check(not dialog.arrow_count_spin.isEnabled(), "arrow settings enabled while arrows are off")
+    dialog.flow_arrows_check.setChecked(True)
+    check(dialog.arrow_count_spin.isEnabled(), "arrow settings not enabled")
+    check(dialog.generate_button.isEnabled(), f"Generate disabled: {dialog.validation_label.text()}")
+    req = dialog._build_request()
+    check(req.mode == gw.MODE_GROUNDWATER and req.gw_value_method == gw.GW_CALCULATED and req.flow_arrows,
+          "request does not reflect the dialog")
+
+    ctx.stage = "Generate"
+    before = set(project.mapLayers())
+    dialog.generate_button.click()
+    added = sorted(project.mapLayer(i).name() for i in set(project.mapLayers()) - before)
+    check(added == ["GW Contours", "GW Flow Direction"], f"added layers {added}")
+
+    ctx.stage = "back to General"
+    dialog.mode_combo.setCurrentIndex(dialog.mode_combo.findData(gw.MODE_GENERAL))
+    check(dialog.style_combo.currentData() == general_style, "General style not restored")
+    check(not dialog._build_request().flow_arrows, "flow arrows leak into General mode")
+    dialog.cleanup()
+    dialog.close()
+    dialog.deleteLater()
+    project.removeAllMapLayers()
+    ctx.note("mode switch, numeric-text label, field preselection, counts, Generate adds contours + arrows")
 
 
 def main():

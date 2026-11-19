@@ -197,15 +197,22 @@ def _conflict_text(samples):
     return f"{samples.conflicting_locations} location(s) have points with different values (e.g. {examples}{more})"
 
 
-def point_data_report(samples, field_name):
+GROUNDWATER_DUPLICATE_NOTE = (
+    ". In groundwater data this often means nested wells, multiple screened intervals, "
+    "duplicate GIS points or different aquifers; they are not merged silently"
+)
+
+
+def point_data_report(samples, field_name, groundwater=False):
     """Return ``(errors, warnings)`` for prepared point samples.
 
     Warnings starting with "IMPORTANT:" deserve the user's attention before
-    the contours are relied on.
+    the contours are relied on. ``groundwater`` adds the hydrogeological
+    meaning of conflicting duplicate locations.
     """
     errors, warnings = [], []
     if samples.conflicting_locations:
-        text = _conflict_text(samples)
+        text = _conflict_text(samples) + (GROUNDWATER_DUPLICATE_NOTE if groundwater else "")
         if samples.duplicate_mode == DUPLICATES_STOP:
             errors.append(
                 f"{text}. Check whether they are different wells, screens or intervals, "
@@ -276,3 +283,51 @@ def raster_range_problem(vmin, vmax, valid_cells, band=1):
     if vmin == vmax:
         return f"All values in band {band} are equal ({vmin:g}); there is nothing to contour."
     return None
+
+
+# ------------------------------------------------------- groundwater fields
+
+#: Features read to decide whether a text field holds numeric values.
+TEXT_FIELD_SAMPLE = 500
+TEXT_FIELD_NOTE = "text field, numeric values detected"
+
+
+def groundwater_field_choices(layer, sample_size=TEXT_FIELD_SAMPLE):
+    """Fields that can hold groundwater values: ``[(name, label, is_text)]``.
+
+    Numeric fields are offered as they are. Text fields are offered when most
+    of their non-empty values (in the first ``sample_size`` features) convert
+    to numbers, labelled e.g. ``"WL - text field, numeric values detected"``.
+    The layer is only read.
+    """
+    from .groundwater import looks_numeric  # plain Python module
+
+    if layer is None:
+        return []
+    fields = layer.fields()
+    numeric = [fields.at(i).isNumeric() for i in range(fields.count())]
+    samples = {i: [] for i in range(fields.count()) if not numeric[i]}
+    if samples:
+        for count, feature in enumerate(layer.getFeatures()):
+            if count >= sample_size:
+                break
+            for i in samples:
+                samples[i].append(feature.attribute(i))
+    choices = []
+    for i in range(fields.count()):
+        name = fields.at(i).name()
+        if numeric[i]:
+            choices.append((name, name, False))
+            continue
+        values = samples[i]
+        texts_only = all(isinstance(v, str) for v in values if v is not None and not _is_null(v))
+        if texts_only and looks_numeric(values):
+            choices.append((name, f"{name} — {TEXT_FIELD_NOTE}", True))
+    return choices
+
+
+def _is_null(value):
+    try:
+        return bool(value.isNull())
+    except AttributeError:
+        return False

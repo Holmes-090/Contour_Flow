@@ -16,6 +16,17 @@ results are predictable:
   repairable).
 * **Gradient raster** (EPSG:32633): 200 x 100 cells of 1 m, value
   ``50 + 0.1 * column`` (column 0-199, so range 50.0-69.9), Float32, NoData -9999.
+* **Groundwater wells** (EPSG:32633), offsets 0-200 m: heads on the plane
+  ``head = 100 - 0.01*dx + 0.01*dy``, which falls to the east and to the
+  south, so groundwater flows to the **south-east** (azimuth 135 degrees) with
+  a hydraulic gradient of ``0.01 * sqrt(2)``. Fields: ``head`` (double),
+  ``mp_elev`` and ``dtw`` (head = mp_elev - dtw), ``ground`` (head + 3) and
+  ``wl_text`` (heads as padded text). Four records have no usable head: NULL,
+  "Dry", "N/A" and blank.
+* **Groundwater QA wells**: the 13 valid wells with one off-trend head
+  (+1.5 m), one head above ground and one nested well at the same location
+  with a different head.
+* **Groundwater boundary in WGS84**: the UTM rectangle (20,20)-(180,120).
 """
 
 import os
@@ -71,6 +82,24 @@ def raster_value(column):
     return 50.0 + 0.1 * column
 
 
+def gw_head(dx, dy):
+    """Exact head of the groundwater fixture plane (flow to the south-east)."""
+    return 100.0 - 0.01 * dx + 0.01 * dy
+
+
+GW_GRADIENT = 0.01 * 2 ** 0.5
+GW_AZIMUTH = 135.0
+GW_WELLS = [(i + 1, dx, dy) for i, (dx, dy) in enumerate([
+    (0, 0), (100, 0), (200, 0), (0, 100), (100, 100), (200, 100), (0, 200), (100, 200), (200, 200),
+    (50, 150), (150, 50), (150, 150), (50, 50),
+])]
+#: (id, dx, dy, wl_text) records without a usable head.
+GW_UNUSABLE = [(14, 60, 120, None), (15, 140, 90, "Dry"), (16, 90, 160, "N/A"), (17, 170, 20, "  ")]
+GW_VALID = len(GW_WELLS)
+GW_BOUNDARY_UTM_WKT = "POLYGON((500020 5000020, 500180 5000020, 500180 5000120, 500020 5000120, 500020 5000020))"
+GW_OUTLIER_WELL, GW_ABOVE_GROUND_WELL, GW_NESTED_WELL = 13, 9, 5
+
+
 def _write_vector(layer, path, name):
     options = QgsVectorFileWriter.SaveVectorOptions()
     options.driverName = "GPKG"
@@ -110,6 +139,55 @@ def _boundary_wgs84_layer():
         )
     )
     layer = QgsVectorLayer(f"Polygon?crs={WGS84}&field=name:string", "boundary_wgs84", "memory")
+    feature = QgsFeature(layer.fields())
+    feature.setAttributes(["site"])
+    feature.setGeometry(geometry)
+    layer.dataProvider().addFeatures([feature])
+    return layer
+
+
+def _gw_layer(qa=False):
+    layer = QgsVectorLayer(
+        f"Point?crs={UTM}&field=well_id:string&field=head:double&field=mp_elev:double&field=dtw:double"
+        "&field=ground:double&field=wl_text:string",
+        "gw_qa_wells" if qa else "gw_wells", "memory",
+    )
+    rows = []
+    for wid, dx, dy in GW_WELLS:
+        head = gw_head(dx, dy)
+        ground = head + 3.0
+        if qa and wid == GW_OUTLIER_WELL:
+            head += 1.5
+        if qa and wid == GW_ABOVE_GROUND_WELL:
+            ground = head - 0.4
+        mp = ground + 0.5
+        rows.append((f"MW-{wid}", dx, dy, head, mp, mp - head, ground, f" {head:.3f} "))
+    if qa:
+        dx, dy = next((dx, dy) for wid, dx, dy in GW_WELLS if wid == GW_NESTED_WELL)
+        head = gw_head(dx, dy) + 0.7
+        rows.append((f"MW-{GW_NESTED_WELL}D", dx, dy, head, head + 3.5, 3.5, head + 3.0, f"{head:.3f}"))
+    else:
+        for wid, dx, dy, text in GW_UNUSABLE:
+            ground = gw_head(dx, dy) + 3.0
+            rows.append((f"MW-{wid}", dx, dy, None, ground + 0.5, None, ground, text))
+    features = []
+    for well_id, dx, dy, *values in rows:
+        feature = QgsFeature(layer.fields())
+        feature.setAttributes([well_id, *values])
+        feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(X0 + dx, Y0 + dy)))
+        features.append(feature)
+    layer.dataProvider().addFeatures(features)
+    return layer
+
+
+def _gw_boundary_wgs84_layer():
+    geometry = QgsGeometry.fromWkt(GW_BOUNDARY_UTM_WKT)
+    geometry.transform(
+        QgsCoordinateTransform(
+            QgsCoordinateReferenceSystem(UTM), QgsCoordinateReferenceSystem(WGS84), QgsCoordinateTransformContext()
+        )
+    )
+    layer = QgsVectorLayer(f"Polygon?crs={WGS84}&field=name:string", "gw_boundary_wgs84", "memory")
     feature = QgsFeature(layer.fields())
     feature.setAttributes(["site"])
     feature.setGeometry(geometry)
@@ -163,4 +241,7 @@ def create_fixtures(folder):
         "boundary_wgs84": _write_vector(_boundary_wgs84_layer(), gpkg, "boundary_wgs84"),
         "boundary_multi": _write_vector(_boundary_multi_layer(), gpkg, "boundary_multi"),
         "raster": _write_raster(os.path.join(folder, "gradient_dem.tif")),
+        "gw_wells": _write_vector(_gw_layer(), gpkg, "gw_wells"),
+        "gw_qa_wells": _write_vector(_gw_layer(qa=True), gpkg, "gw_qa_wells"),
+        "gw_boundary_wgs84": _write_vector(_gw_boundary_wgs84_layer(), gpkg, "gw_boundary_wgs84"),
     }

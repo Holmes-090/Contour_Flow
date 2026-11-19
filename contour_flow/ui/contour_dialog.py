@@ -8,6 +8,8 @@ This module holds the dialog's behaviour only:
 * configuring the QGIS widgets (layer/field/band filters, file pickers);
 * a simple default view plus a collapsed **Advanced settings** section;
   only the controls that apply are shown or enabled;
+* a Mode selector: General contours, or Groundwater (monitoring wells to
+  groundwater-elevation contours, groundwater QA and optional flow arrows);
 * plain-language live validation that enables "Generate Contours";
 * a concise summary computed with ``core.workflow.plan_contours``, which is
   the same planning step the run uses;
@@ -23,6 +25,7 @@ releases those connections.
 
 import html
 import os
+import re
 import traceback
 
 from qgis.core import Qgis, QgsFieldProxyModel, QgsProcessingFeedback, QgsProject
@@ -30,9 +33,10 @@ from qgis.gui import QgsFileWidget
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QCoreApplication, Qt, QTimer
 from qgis.PyQt.QtGui import QCursor
-from qgis.PyQt.QtWidgets import QApplication, QDialog, QProgressDialog
+from qgis.PyQt.QtWidgets import QApplication, QComboBox, QDialog, QProgressDialog
 
 from ..core import ContourCancelled, ContourError
+from ..core import groundwater as gw
 from ..core import options as opt
 from ..core.input_validation import (
     DUPLICATE_LABELS,
@@ -41,6 +45,7 @@ from ..core.input_validation import (
     DUPLICATES_STOP,
     FEATURES_ALL,
     FEATURES_SELECTED,
+    groundwater_field_choices,
     is_numeric_field,
     point_input_problem,
     raster_input_problem,
@@ -56,7 +61,7 @@ from ..core.workflow import (
 from ..utils.qgis_helpers import PLUGIN_NAME, log_message, plugin_version
 
 #: Shown in the dialog's diagnostics row.
-BUILD_STATUS = "0.1.0 release candidate"
+BUILD_STATUS = "0.2.0 development (Groundwater Mode)"
 
 #: Layer signals that trigger re-validation (point and boundary layers).
 WATCHED_LAYER_SIGNALS = ("selectionChanged", "featureAdded", "featuresDeleted")
@@ -71,6 +76,25 @@ MSG_NO_LAYERS = "Add a point layer with a numeric elevation field, or add an ele
 MSG_NO_POINT_LAYERS = "The project has no point layers. Add one, or switch Source to Raster."
 MSG_NO_RASTER_LAYERS = "The project has no raster layers. Add an elevation raster, or switch Source to Point layer."
 MSG_NO_NUMERIC_FIELDS = "The selected point layer has no numeric fields available for contouring."
+MSG_NO_GW_FIELDS = (
+    "The selected point layer has no numeric fields (or text fields with numeric values) "
+    "for groundwater values."
+)
+
+#: Name patterns used to preselect Groundwater fields (only when nothing is chosen yet).
+GW_FIELD_HINTS = {
+    "head": r"gw.?elev|head|water.?(level|elev)|^wl|wte|piezo|swl",
+    "mp": r"^mp|toc|casing|meas.*point|ref.?elev",
+    "dtw": r"dtw|depth.?to.?water|^dtgw|^depth|^wl.?depth",
+    "ground": r"ground|grade|surface|^gs|^dem|land",
+}
+
+#: General-mode settings restored when leaving Groundwater Mode.
+GW_DEFAULTS = {
+    "style_combo": opt.STYLE_GROUNDWATER,
+    "smoothing_combo": opt.SMOOTH_LIGHT,
+    "label_mode_combo": opt.LABELS_MAJOR,
+}
 
 FORM_CLASS, _ = uic.loadUiType(
     os.path.join(os.path.dirname(__file__), "contour_dialog.ui")
@@ -137,7 +161,22 @@ class ContourDialog(QDialog, FORM_CLASS):
         self.value_field_combo.setFilters(QgsFieldProxyModel.Filter.Numeric)
         self.value_field_combo.setLayer(self.point_layer_combo.currentLayer())
         self.raster_band_combo.setLayer(self.raster_layer_combo.currentLayer())
+        self._fill_groundwater_fields(self.point_layer_combo.currentLayer())
 
+        _fill(self.mode_combo, [(gw.MODE_GENERAL, "General contours"), (gw.MODE_GROUNDWATER, "Groundwater")])
+        _fill(self.gw_method_combo, [
+            (gw.GW_EXISTING, "Existing field"),
+            (gw.GW_CALCULATED, "Calculate: MP \u2212 depth to water"),
+        ])
+        _fill(self.arrow_scaling_combo, [(gw.ARROWS_UNIFORM, "Uniform"), (gw.ARROWS_SCALED, "Scaled by gradient")])
+        _fill(self.arrow_support_combo, list(gw.ARROW_SUPPORT_LABELS.items()))
+        self.arrow_count_spin.setValue(gw.ARROW_COUNT_DEFAULT)
+        # Long item texts (e.g. "WL - text field, numeric values detected") must not widen the dialog.
+        for combo in (self.gw_method_combo, self.gw_head_combo, self.gw_mp_combo, self.gw_dtw_combo,
+                      self.gw_ground_combo, self.arrow_scaling_combo, self.arrow_support_combo):
+            combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+            combo.setMinimumContentsLength(14)
+        self._general_settings = {}
         _fill(self.feature_mode_combo, [(FEATURES_ALL, "All features"), (FEATURES_SELECTED, "Selected features only")])
         _fill(self.interval_mode_combo, [(INTERVAL_AUTO, "Automatic"), (INTERVAL_FIXED, "Fixed")])
         _fill(self.label_mode_combo, list(opt.LABEL_LABELS.items()))
@@ -185,7 +224,9 @@ class ContourDialog(QDialog, FORM_CLASS):
     def _connect_signals(self):
         """Connect signals of widgets owned by this dialog (they die with it)."""
         changed = self._on_inputs_changed
+        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         self.point_mode_radio.toggled.connect(changed)
+        self.flow_arrows_check.toggled.connect(changed)
         # Order matters: update the dependent widget first, then validate.
         self.point_layer_combo.layerChanged.connect(self.value_field_combo.setLayer)
         self.point_layer_combo.layerChanged.connect(self._on_point_layer_changed)
@@ -216,6 +257,16 @@ class ContourDialog(QDialog, FORM_CLASS):
             self.surface_mode_combo.currentIndexChanged,
             self.geopackage_file_widget.fileChanged,
             self.surface_file_widget.fileChanged,
+            self.gw_method_combo.currentIndexChanged,
+            self.gw_head_combo.currentIndexChanged,
+            self.gw_mp_combo.currentIndexChanged,
+            self.gw_dtw_combo.currentIndexChanged,
+            self.gw_ground_combo.currentIndexChanged,
+            self.arrow_count_spin.valueChanged,
+            self.arrow_scaling_combo.currentIndexChanged,
+            self.arrow_length_spin.valueChanged,
+            self.arrow_support_combo.currentIndexChanged,
+            self.arrow_buffer_spin.valueChanged,
         ):
             signal.connect(changed)
 
@@ -231,6 +282,7 @@ class ContourDialog(QDialog, FORM_CLASS):
     # -------------------------------------------------- external layer tracking
 
     def _on_point_layer_changed(self, layer):
+        self._fill_groundwater_fields(layer)
         self._watch("point", layer)
         self._update_custom_extent_crs()
         self._on_inputs_changed()
@@ -275,6 +327,46 @@ class ContourDialog(QDialog, FORM_CLASS):
         if not self.custom_extent_widget.isValid():
             self.custom_extent_widget.setCurrentExtent(layer.extent(), layer.crs())
 
+    def _fill_groundwater_fields(self, layer):
+        """Offer numeric and numeric-text fields; keep choices by name where possible."""
+        choices = groundwater_field_choices(layer if layer is not None and layer.isValid() else None)
+        combos = (
+            ("head", self.gw_head_combo, False),
+            ("mp", self.gw_mp_combo, False),
+            ("dtw", self.gw_dtw_combo, False),
+            ("ground", self.gw_ground_combo, True),
+        )
+        for key, combo, optional in combos:
+            previous = combo.currentData()
+            combo.blockSignals(True)
+            combo.clear()
+            if optional:
+                combo.addItem("None", "")
+            for name, text, _is_text in choices:
+                combo.addItem(text, name)
+            index = combo.findData(previous) if previous else -1
+            if index < 0:
+                pattern = re.compile(GW_FIELD_HINTS[key], re.IGNORECASE)
+                index = next((combo.findData(name) for name, _t, _x in choices if pattern.search(name)), -1)
+            if index < 0 and key == "dtw":
+                index = min(1, combo.count() - 1)  # a different default than the MP field
+            combo.setCurrentIndex(max(index, 0))
+            combo.blockSignals(False)
+
+    def _on_mode_changed(self, *_args):
+        """Groundwater: point input, blue style, light smoothing. General: restore the previous choices."""
+        groundwater = self._is_groundwater()
+        for name, value in GW_DEFAULTS.items():
+            combo = getattr(self, name)
+            if groundwater:
+                self._general_settings[name] = combo.currentData()
+                combo.setCurrentIndex(combo.findData(value))
+            elif name in self._general_settings:
+                combo.setCurrentIndex(combo.findData(self._general_settings.pop(name)))
+        if groundwater and not self.point_mode_radio.isChecked():
+            self.point_mode_radio.setChecked(True)
+        self._on_inputs_changed()
+
     def _on_cell_size_auto_toggled(self, automatic):
         # Switching to manual starts from the automatic value, if one is known.
         if not automatic and self._last_auto_cell_size:
@@ -284,7 +376,10 @@ class ContourDialog(QDialog, FORM_CLASS):
     # ------------------------------------------------------ current choices
 
     def _is_point_mode(self):
-        return self.point_mode_radio.isChecked()
+        return self.point_mode_radio.isChecked() or self._is_groundwater()
+
+    def _is_groundwater(self):
+        return self.mode_combo.currentData() == gw.MODE_GROUNDWATER
 
     def _current_point_layer(self):
         layer = self.point_layer_combo.currentLayer()
@@ -300,10 +395,23 @@ class ContourDialog(QDialog, FORM_CLASS):
 
     def _build_request(self):
         point_mode = self._is_point_mode()
+        groundwater = self._is_groundwater()
         return ContourRequest(
+            mode=gw.MODE_GROUNDWATER if groundwater else gw.MODE_GENERAL,
             source_type=SOURCE_POINTS if point_mode else SOURCE_RASTER,
             point_layer=self._current_point_layer(),
-            value_field=self.value_field_combo.currentField(),
+            value_field=(self.gw_head_combo.currentData() or "") if groundwater
+            else self.value_field_combo.currentField(),
+            gw_value_method=self.gw_method_combo.currentData(),
+            mp_field=self.gw_mp_combo.currentData() or "",
+            dtw_field=self.gw_dtw_combo.currentData() or "",
+            ground_field=self.gw_ground_combo.currentData() or "",
+            flow_arrows=groundwater and self.flow_arrows_check.isChecked(),
+            arrow_count=self.arrow_count_spin.value(),
+            arrow_scaling=self.arrow_scaling_combo.currentData(),
+            arrow_length=self.arrow_length_spin.value(),
+            arrow_support=self.arrow_support_combo.currentData(),
+            arrow_buffer=self.arrow_buffer_spin.value(),
             selected_only=self.feature_mode_combo.currentData() == FEATURES_SELECTED,
             duplicate_mode=self.duplicate_mode_combo.currentData(),
             method=self.method_combo.currentData(),
@@ -346,8 +454,29 @@ class ContourDialog(QDialog, FORM_CLASS):
 
     def _update_visibility(self):
         point_mode = self._is_point_mode()
+        groundwater = self._is_groundwater()
         self.point_input_widget.setVisible(point_mode)
         self.raster_input_widget.setVisible(not point_mode)
+        # Groundwater Mode: wells only; its own value fields replace the General field.
+        _show(not groundwater, self.source_caption, self.source_widget,
+              self.value_field_caption, self.value_field_combo)
+        self.gw_input_widget.setVisible(groundwater)
+        self.gw_group.setVisible(groundwater)
+        self.advanced_gw_group.setVisible(groundwater)
+        calculated = self.gw_method_combo.currentData() == gw.GW_CALCULATED
+        _show(not calculated, self.gw_head_caption, self.gw_head_combo)
+        _show(calculated, self.gw_mp_caption, self.gw_mp_combo, self.gw_dtw_caption, self.gw_dtw_combo)
+        arrows = self.flow_arrows_check.isChecked()
+        _enable(arrows, self.arrow_count_caption, self.arrow_count_spin, self.arrow_scaling_caption,
+                self.arrow_scaling_combo, self.arrow_length_caption, self.arrow_length_spin,
+                self.arrow_support_caption, self.arrow_support_combo)
+        _enable(arrows and self.arrow_support_combo.currentData() == gw.ARROWS_BUFFERED_HULL,
+                self.arrow_buffer_caption, self.arrow_buffer_spin)
+        self.intro_label.setText(
+            "Groundwater: contour groundwater elevations from monitoring wells, with QA checks and optional "
+            "flow-direction arrows." if groundwater else
+            "Create editable contour lines from points with a numeric field, or from a raster."
+        )
         raster = self._current_raster_layer()
         _show(raster is not None and raster.bandCount() > 1, self.raster_band_caption, self.raster_band_combo)
 
@@ -406,13 +535,20 @@ class ContourDialog(QDialog, FORM_CLASS):
         if self.point_layer_combo.count() == 0:
             return MSG_NO_LAYERS if self.raster_layer_combo.count() == 0 else MSG_NO_POINT_LAYERS
         layer = self._current_point_layer()
-        if layer is not None and self.value_field_combo.count() == 0:
-            return MSG_NO_NUMERIC_FIELDS
-        field_name = self.value_field_combo.currentField()
+        if self._is_groundwater():
+            problem = self._groundwater_field_problem(layer)
+            if problem:
+                return problem
+            field_name, field_ok = "groundwater", True  # fields checked above; values in the summary
+        else:
+            if layer is not None and self.value_field_combo.count() == 0:
+                return MSG_NO_NUMERIC_FIELDS
+            field_name = self.value_field_combo.currentField()
+            field_ok = is_numeric_field(layer, field_name)
         problem = point_input_problem(
             has_layer=layer is not None,
             field_name=field_name,
-            field_is_numeric=is_numeric_field(layer, field_name),
+            field_is_numeric=field_ok,
             feature_mode=self.feature_mode_combo.currentData(),
             total_count=layer.featureCount() if layer is not None else 0,
             selected_count=layer.selectedFeatureCount() if layer is not None else 0,
@@ -433,6 +569,24 @@ class ContourDialog(QDialog, FORM_CLASS):
             return problem
         if self.surface_mode_combo.currentData() == opt.SURFACE_GEOTIFF:
             return opt.output_path_problem(self.surface_file_widget.filePath().strip(), ".tif", "GeoTIFF")
+        return None
+
+    def _groundwater_field_problem(self, layer):
+        if layer is None:
+            return "Choose a point layer of monitoring wells."
+        if self.gw_head_combo.count() == 0:
+            return MSG_NO_GW_FIELDS
+        if self.gw_method_combo.currentData() == gw.GW_CALCULATED:
+            if self.gw_mp_combo.currentData() == self.gw_dtw_combo.currentData():
+                return "Choose different fields for measuring-point elevation and depth to water."
+        elif not self.gw_head_combo.currentData():
+            return "Choose a groundwater elevation field."
+        if self.flow_arrows_check.isChecked():
+            support = self.arrow_support_combo.currentData()
+            if support == gw.ARROWS_BOUNDARY and self._current_boundary_layer() is None:
+                return "Flow arrows 'within the boundary polygon' need a boundary layer (Boundary, above)."
+            if support == gw.ARROWS_BUFFERED_HULL and self.arrow_buffer_spin.value() <= 0:
+                return "The arrow hull buffer must be greater than 0."
         return None
 
     def _raster_problem(self):
@@ -489,6 +643,7 @@ class ContourDialog(QDialog, FORM_CLASS):
         if self._running:
             return
         problem = self._live_problem()
+        self.gw_count_label.setText("")
         if problem:
             self.summary_label.setText(html.escape(problem))
             return
@@ -500,6 +655,10 @@ class ContourDialog(QDialog, FORM_CLASS):
             return
         if plan.cell_size_auto and plan.cell_size:
             self._last_auto_cell_size = plan.cell_size
+        stats = plan.head_stats
+        if stats is not None:
+            skipped = stats.null + stats.non_numeric + stats.skipped_geometries
+            self.gw_count_label.setText(f"{stats.usable} usable groundwater elevations / {skipped} skipped")
         parts = []
         for line in plan.summary_lines():
             key, _sep, value = line.partition(": ")
@@ -589,12 +748,20 @@ class ContourDialog(QDialog, FORM_CLASS):
         for layer in ([result.surface_layer] if result.surface_layer is not None else []) + result.extra_layers:
             project.addMapLayer(layer)
         project.addMapLayer(result.contour_layer)
+        if result.arrow_layer is not None:
+            project.addMapLayer(result.arrow_layer)
 
         log_message("\n".join(["Contours generated."] + result.summary + result.warnings))
         self.message_bar.pushMessage(
             PLUGIN_NAME,
             f"Created '{result.contour_layer.name()}' with {result.contour_layer.featureCount()} line(s) "
-            f"at interval {result.interval:g}. Settings are in Layer Properties > Metadata.",
+            f"at interval {result.interval:g}"
+            + (f" and '{result.arrow_layer.name()}' with {result.arrow_layer.featureCount()} arrow(s)"
+               if result.arrow_layer is not None else "")
+            + ". "
+            + "".join(f"{line}. " for line in result.summary
+                      if line.startswith(("General groundwater flow direction", "Hydraulic gradient")))
+            + "Settings are in Layer Properties > Metadata.",
             level=Qgis.MessageLevel.Success,
             duration=10,
         )

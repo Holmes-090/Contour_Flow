@@ -63,6 +63,24 @@ def _label_settings(color, decimals):
     return settings
 
 
+def apply_arrow_style(layer, color="#1f5fbf"):
+    """Blue straight arrows using QGIS's own Arrow symbol layer (editable in Layer Properties)."""
+    from qgis.core import QgsArrowSymbolLayer, QgsSingleSymbolRenderer
+
+    arrow = QgsArrowSymbolLayer.create({
+        "arrow_width": "0.5", "arrow_width_unit": "MM",
+        "arrow_start_width": "0.5", "arrow_start_width_unit": "MM",
+        "head_length": "2.2", "head_length_unit": "MM",
+        "head_thickness": "1.5", "head_thickness_unit": "MM",
+        "arrow_type": "0", "head_type": "0", "is_curved": "0", "is_repeated": "0",
+    })
+    arrow.subSymbol().setColor(QColor(color))
+    symbol = QgsLineSymbol()
+    symbol.changeSymbolLayer(0, arrow)
+    layer.setRenderer(QgsSingleSymbolRenderer(symbol))
+    layer.triggerRepaint()
+
+
 def apply_style(layer, preset, label_mode, decimals):
     """Apply a style preset and optional labels to a contour ``layer``."""
     color = STYLE_PRESETS[preset]["color"]

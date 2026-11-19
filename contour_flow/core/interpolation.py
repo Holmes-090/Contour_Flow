@@ -64,6 +64,33 @@ def read_point_samples(layer, field_name, selected_only, feedback=None):
     return raw_samples, skipped_geometries
 
 
+def read_point_rows(layer, field_names, selected_only, feedback=None):
+    """Read raw attribute values for every point vertex. The layer is not changed.
+
+    Returns ``(rows, skipped_geometries)`` with rows ``(x, y, fid, values)``,
+    where ``values`` holds the raw attribute for each name in ``field_names``
+    (``None`` for an empty name). Conversion to numbers happens later.
+    """
+    fields = layer.fields()
+    indices = [fields.lookupField(name) if name else -1 for name in field_names]
+    request = QgsFeatureRequest()
+    request.setSubsetOfAttributes([i for i in indices if i >= 0])
+    if selected_only:
+        request.setFilterFids(layer.selectedFeatureIds())
+    rows, skipped_geometries = [], 0
+    for count, feature in enumerate(layer.getFeatures(request)):
+        if feedback is not None and count % 5000 == 0 and feedback.isCanceled():
+            break
+        geometry = feature.geometry()
+        if geometry is None or geometry.isNull() or geometry.isEmpty():
+            skipped_geometries += 1
+            continue
+        values = tuple(feature.attribute(i) if i >= 0 else None for i in indices)
+        for vertex in geometry.vertices():
+            rows.append((vertex.x(), vertex.y(), feature.id(), values))
+    return rows, skipped_geometries
+
+
 def build_point_layer(points, crs):
     """Return a temporary memory point layer holding ``(x, y, value)`` points."""
     layer = QgsVectorLayer(f"Point?field={VALUE_FIELD}:double", "contour_flow_points", "memory")

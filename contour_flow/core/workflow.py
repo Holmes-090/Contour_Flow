@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 
 from qgis.core import (
     Qgis,
+    QgsGeometry,
     QgsProcessingContext,
     QgsProcessingFeedback,
     QgsProject,
@@ -51,7 +52,9 @@ from .input_validation import (
     prepare_point_samples,
     raster_range_problem,
 )
-from .interpolation import build_point_layer, read_point_samples, run_interpolation
+from . import groundwater as gw
+from .flow import FLOW_METHOD, build_flow_arrows
+from .interpolation import build_point_layer, read_point_rows, read_point_samples, run_interpolation
 from .intervals import INTERVAL_AUTO, auto_major_every, level_count, resolve_interval
 from .options import (
     BOUNDARY_ALL,
@@ -79,6 +82,8 @@ from .options import (
     clean_layer_name,
     default_layer_name,
     extent_problem,
+    groundwater_smoothing_fallbacks,
+    groundwater_smoothing_parameters,
     idw_power_problem,
     label_precision_problem,
     major_every_problem,
@@ -90,8 +95,8 @@ from .options import (
 )
 from .output import geopackage_layer_names, load_geopackage_layer, remove_written, write_geopackage_layer
 from .report import METADATA_PROPERTY, metadata_json, metadata_text
-from .smoothing import smooth_lines
-from .styling import apply_style
+from .smoothing import max_displacement, smooth_groundwater, smooth_lines
+from .styling import apply_arrow_style, apply_style
 
 SOURCE_POINTS = "points"
 SOURCE_RASTER = "raster"
@@ -108,6 +113,7 @@ OUTSIDE_HULL_WARNING_FRACTION = 0.001
 class ContourRequest:
     """Everything the user chose in the dialog, as plain values."""
 
+    mode: str = gw.MODE_GENERAL
     source_type: str = SOURCE_POINTS
     # Point input
     point_layer: object = None
@@ -145,6 +151,17 @@ class ContourRequest:
     output_name: str = ""
     surface_mode: str = SURFACE_NONE
     surface_path: str = ""
+    # Groundwater Mode (ignored in General mode)
+    gw_value_method: str = gw.GW_EXISTING  # head from value_field, or MP - DTW
+    mp_field: str = ""
+    dtw_field: str = ""
+    ground_field: str = ""  # optional, QA only
+    flow_arrows: bool = False
+    arrow_count: int = gw.ARROW_COUNT_DEFAULT
+    arrow_scaling: str = gw.ARROWS_UNIFORM
+    arrow_length: float = 0.0  # 0 = automatic
+    arrow_support: str = gw.ARROWS_HULL
+    arrow_buffer: float = 0.0
 
 
 @dataclass
@@ -164,15 +181,25 @@ class ContourPlan:
     cell_size_auto: bool = False
     extent: object = None  # QgsRectangle, processing CRS
     clip_polygon: object = None  # QgsGeometry or None
-    smoothing: tuple = None  # (iterations, offset) or None
+    smoothing: tuple = None  # (iterations, offset[, simplify cells]) or None
     major_every: int = None  # resolved (automatic or chosen)
+    head_stats: object = None  # groundwater.HeadStats (Groundwater Mode)
+    hull: object = None  # QgsGeometry of the usable points
+    boundary: object = None  # boundary union in the processing CRS
+    arrow_support: object = None  # QgsGeometry where flow arrows may be drawn
 
     @property
     def ok(self):
         return not self.errors
 
+    @property
+    def groundwater(self):
+        return self.request.mode == gw.MODE_GROUNDWATER
+
     def summary_lines(self):
         """Concise preview lines for the dialog; only applicable fields."""
+        if self.groundwater:
+            return self._groundwater_summary()
         r = self.request
         points = r.source_type == SOURCE_POINTS
         lines = []
@@ -200,6 +227,34 @@ class ContourPlan:
         if self.interval is not None:
             lines.append(f"Contour interval: {self.interval:g}")
             lines.append(f"Estimated levels: {self.levels}")
+        return lines
+
+    def _groundwater_summary(self):
+        r = self.request
+        lines = []
+        if self.samples is not None:
+            usable = len(self.samples.points)
+            lines.append(f"Usable wells: {usable}")
+            if self.raw_count > usable:
+                lines.append(f"Skipped records: {self.raw_count - usable}")
+        if self.value_min is not None:
+            decimals = 2 if self.value_max - self.value_min >= 1 else 3
+            lines.append(f"Head range: {self.value_min:.{decimals}f} \u2013 {self.value_max:.{decimals}f}")
+        if self.cell_size is not None:
+            method = METHOD_LABELS.get(r.method, r.method)
+            if r.method == METHOD_IDW:
+                method += f" (power {r.idw_power:g})"
+            lines.append(f"Interpolation: {method}")
+        if self.interval is not None:
+            lines.append(f"Contour interval: {self.interval:g}")
+            lines.append(f"Estimated contours: {self.levels}")
+        lines.append(f"Smoothing: {SMOOTH_LABELS.get(r.smoothing_mode, r.smoothing_mode)}")
+        if r.flow_arrows:
+            lines.append(f"Flow arrows: on, {gw.ARROW_SUPPORT_LABELS.get(r.arrow_support, r.arrow_support).lower()}")
+        else:
+            lines.append("Flow arrows: off")
+        if r.boundary_layer is not None:
+            lines.append(f"Clipped to: {r.boundary_layer.name()}")
         return lines
 
 
@@ -231,9 +286,12 @@ def _plan_options(plan):
     ):
         if problem:
             plan.errors.append(problem)
-    plan.smoothing, problem = smoothing_parameters(r.smoothing_mode, r.smooth_iterations, r.smooth_offset)
+    smoothing = groundwater_smoothing_parameters if plan.groundwater else smoothing_parameters
+    plan.smoothing, problem = smoothing(r.smoothing_mode, r.smooth_iterations, r.smooth_offset)
     if problem:
         plan.errors.append(problem)
+    if plan.groundwater:
+        _plan_groundwater_options(plan)
     if r.output_mode == OUTPUT_GEOPACKAGE:
         problem = output_path_problem(r.geopackage_path, ".gpkg", "GeoPackage")
         if problem:
@@ -255,6 +313,108 @@ def _plan_options(plan):
             )
             if problem:
                 plan.errors.append(problem)
+
+
+def _plan_groundwater_options(plan):
+    r = plan.request
+    if r.source_type != SOURCE_POINTS:
+        plan.errors.append("Groundwater Mode works on point layers (monitoring wells).")
+    if r.gw_value_method not in (gw.GW_EXISTING, gw.GW_CALCULATED):
+        plan.errors.append(f"Unknown groundwater value method: {r.gw_value_method!r}.")
+    if r.flow_arrows:
+        if not (isinstance(r.arrow_count, int) and 1 <= r.arrow_count <= 500):
+            plan.errors.append("The approximate arrow count must be a whole number from 1 to 500.")
+        if r.arrow_scaling not in (gw.ARROWS_UNIFORM, gw.ARROWS_SCALED):
+            plan.errors.append(f"Unknown arrow scaling: {r.arrow_scaling!r}.")
+        if r.arrow_support not in gw.ARROW_SUPPORT_LABELS:
+            plan.errors.append(f"Unknown arrow area: {r.arrow_support!r}.")
+        elif r.arrow_support == gw.ARROWS_BOUNDARY and r.boundary_layer is None:
+            plan.errors.append("Flow arrows 'within the boundary polygon' need a boundary layer.")
+        elif r.arrow_support == gw.ARROWS_BUFFERED_HULL and not r.arrow_buffer > 0:
+            plan.errors.append("The arrow hull buffer must be greater than 0.")
+        if r.arrow_length < 0:
+            plan.errors.append("The arrow length must be 0 (automatic) or positive.")
+
+
+def _groundwater_field_problem(layer, r):
+    names = set(layer.fields().names())
+    if r.gw_value_method == gw.GW_CALCULATED:
+        if not r.mp_field or not r.dtw_field:
+            return "Choose both the measuring-point elevation field and the depth-to-water field."
+        if r.mp_field == r.dtw_field:
+            return "The measuring-point elevation and depth-to-water fields must be different."
+        missing = [f for f in (r.mp_field, r.dtw_field) if f not in names]
+    else:
+        if not r.value_field:
+            return "Choose a groundwater elevation field."
+        missing = [r.value_field] if r.value_field not in names else []
+    if r.ground_field and r.ground_field not in names:
+        missing.append(r.ground_field)
+    if missing:
+        return f"Field(s) not found in the point layer: {', '.join(missing)}."
+    return None
+
+
+def _groundwater_samples(plan, layer, feedback):
+    """Read heads (existing or MP - DTW), run groundwater QA. Returns errors."""
+    r = plan.request
+    calculated = r.gw_value_method == gw.GW_CALCULATED
+    names = ["" if calculated else r.value_field, r.mp_field if calculated else "",
+             r.dtw_field if calculated else "", r.ground_field]
+    rows, skipped = read_point_rows(layer, names, r.selected_only, feedback)
+    stats = gw.build_head_records(
+        [(x, y, fid, *values) for x, y, fid, values in rows], r.gw_value_method, skipped
+    )
+    plan.head_stats = stats
+    plan.raw_count = len(rows) + skipped
+    describe = f"'{r.mp_field}' or '{r.dtw_field}'" if calculated else f"field '{r.value_field}'"
+    raw = [(record.x, record.y, record.head) for record in stats.records if record.head is not None]
+    plan.samples = prepare_point_samples(raw, 0, r.duplicate_mode)
+    errors, warnings = point_data_report(plan.samples, describe, groundwater=True)
+    if stats.usable == 0:
+        errors = [f"No valid groundwater elevations: {describe} has no numeric values for the chosen features."]
+    plan.warnings.extend(gw.head_value_warnings(stats, describe))
+    plan.warnings.extend(warnings)
+    plan.warnings.extend(gw.head_above_ground(stats.records))
+    if calculated:
+        plan.warnings.extend(gw.negative_depth_to_water(stats.records))
+    if not errors:
+        plan.warnings.extend(gw.outlier_warnings(plan.samples.points))
+    return errors
+
+
+def _plan_arrow_support(plan, boundary):
+    """Polygon where flow arrows may be drawn; warns when it reaches beyond the wells."""
+    r = plan.request
+    if r.arrow_support == gw.ARROWS_HULL:
+        support = QgsGeometry(plan.hull)
+    elif r.arrow_support == gw.ARROWS_BUFFERED_HULL:
+        support = plan.hull.buffer(r.arrow_buffer, 8)
+    elif r.arrow_support == gw.ARROWS_BOUNDARY:
+        support = QgsGeometry(boundary)
+    else:
+        support = QgsGeometry(plan.clip_polygon) if plan.clip_polygon is not None else QgsGeometry.fromRect(plan.extent)
+    if boundary is not None and r.arrow_support != gw.ARROWS_BOUNDARY:
+        support = support.intersection(boundary)
+    if plan.clip_polygon is not None:
+        support = support.intersection(plan.clip_polygon)
+    if support.isEmpty() or support.area() <= 0:
+        plan.errors.append("The flow-arrow area does not overlap the contoured area.")
+        return
+    plan.arrow_support = support
+    outside = fraction_outside(plan.extent, support, plan.hull)
+    if outside > OUTSIDE_HULL_WARNING_FRACTION:
+        share = f"{outside:.0%}" if outside >= 0.01 else "<1%"
+        if r.method == METHOD_IDW:
+            plan.warnings.append(
+                f"IMPORTANT: {share} of the flow-arrow area lies outside the monitoring-well network (convex hull). "
+                "IDW extrapolates heads there, so arrows in that area are not supported by measurements."
+            )
+        else:
+            plan.warnings.append(
+                f"IMPORTANT: {share} of the flow-arrow area lies outside the monitoring-well network (convex hull). "
+                "TIN gives no heads there, so no arrows are drawn outside the network."
+            )
 
 
 def _boundary(plan, project):
@@ -292,7 +452,12 @@ def _plan_points(plan, project, feedback):
     if layer is None or not layer.isValid():
         plan.errors.append("The point layer is not available.")
         return
-    if not is_numeric_field(layer, r.value_field):
+    if plan.groundwater:
+        problem = _groundwater_field_problem(layer, r)
+        if problem:
+            plan.errors.append(problem)
+            return
+    elif not is_numeric_field(layer, r.value_field):
         plan.errors.append(f"Field '{r.value_field}' is not a numeric field of the point layer.")
         return
     if r.method not in METHOD_LABELS:
@@ -307,13 +472,18 @@ def _plan_points(plan, project, feedback):
         return
 
     plan.crs = layer.crs()
-    plan.base_name = r.value_field
-    raw, skipped = read_point_samples(layer, r.value_field, r.selected_only, feedback)
-    plan.raw_count = len(raw) + skipped
-    plan.samples = prepare_point_samples(raw, skipped, r.duplicate_mode)
-    errors, warnings = point_data_report(plan.samples, r.value_field)
-    plan.errors.extend(errors)
-    plan.warnings.extend(warnings)
+    if plan.groundwater:
+        plan.base_name = "GW"
+        errors = _groundwater_samples(plan, layer, feedback)
+        plan.errors.extend(errors)
+    else:
+        plan.base_name = r.value_field
+        raw, skipped = read_point_samples(layer, r.value_field, r.selected_only, feedback)
+        plan.raw_count = len(raw) + skipped
+        plan.samples = prepare_point_samples(raw, skipped, r.duplicate_mode)
+        errors, warnings = point_data_report(plan.samples, r.value_field)
+        plan.errors.extend(errors)
+        plan.warnings.extend(warnings)
     plan.warnings.extend(
         crs_warnings(plan.crs.isValid(), plan.crs.isGeographic(), plan.crs.userFriendlyIdentifier())
     )
@@ -323,7 +493,9 @@ def _plan_points(plan, project, feedback):
     plan.value_min, plan.value_max = min(values), max(values)
 
     hull = points_hull(plan.samples.points)
+    plan.hull = hull
     boundary = _boundary(plan, project)
+    plan.boundary = boundary
     custom = None
     if r.extent_mode == EXTENT_CUSTOM:
         custom = transform_rectangle(
@@ -365,6 +537,8 @@ def _plan_points(plan, project, feedback):
         plan.errors.append(problem)
         return
     _set_interval(plan)
+    if plan.groundwater and r.flow_arrows:
+        _plan_arrow_support(plan, boundary)
 
 
 def _plan_raster(plan, project):
@@ -432,9 +606,12 @@ def metadata_items(plan, output_description):
         ("Input type", "Point layer" if points else "Raster"),
     ]
     if points:
+        items += [("Source layer", r.point_layer.name())]
+        if plan.groundwater:
+            items += _groundwater_metadata(plan)
+        else:
+            items.append(("Source field", r.value_field))
         items += [
-            ("Source layer", r.point_layer.name()),
-            ("Source field", r.value_field),
             ("Feature mode", "Selected features only" if r.selected_only else "All features"),
             ("Duplicate locations", DUPLICATE_LABELS[r.duplicate_mode]),
             ("Points used", len(plan.samples.points)),
@@ -489,6 +666,48 @@ def metadata_items(plan, output_description):
     return items
 
 
+def _groundwater_metadata(plan):
+    r = plan.request
+    if r.gw_value_method == gw.GW_CALCULATED:
+        source = f"Calculated: '{r.mp_field}' (measuring-point elevation) - '{r.dtw_field}' (depth to water)"
+    else:
+        source = f"Existing field '{r.value_field}'"
+    stats = plan.head_stats
+    return [
+        ("Mode", "Groundwater"),
+        ("Groundwater elevation", source),
+        ("Ground elevation field (QA only)", r.ground_field or None),
+        ("Valid groundwater elevations", stats.usable if stats else None),
+        ("Records without a usable head",
+         (stats.null + stats.non_numeric + stats.skipped_geometries) if stats else None),
+        ("Interpretation note", gw.DISCLAIMER),
+    ]
+
+
+def _arrow_metadata(plan, info):
+    r = plan.request
+    direction = info["direction"]
+    gradient = info["gradient"]
+    units_ok = plan.crs is not None and plan.crs.isValid() and not plan.crs.isGeographic()
+    return [
+        ("Flow arrows", f"{info['count']} arrow(s)"),
+        ("Flow-direction method", FLOW_METHOD),
+        ("Gradient sampling distance", round(info["step"], 6)),
+        ("Arrow area", gw.ARROW_SUPPORT_LABELS[r.arrow_support]),
+        ("Arrow spacing (approx.)", round(info["spacing"], 6)),
+        ("Arrow length", ("scaled by gradient, up to " if r.arrow_scaling == gw.ARROWS_SCALED else "uniform, ")
+         + f"{info['length']:g}"),
+        ("Generalized flow direction",
+         f"{direction[2]} (about {direction[0]:.0f} degrees; consistency {direction[1]:.2f}) - a generalized "
+         "interpretation, not the direction everywhere" if direction else
+         "not reported (too few arrows or directions too variable)"),
+        ("Local hydraulic gradient (dimensionless)",
+         f"median {gradient[0]:.3g}, range {gradient[1]:.3g}-{gradient[2]:.3g}; assumes heads and coordinates "
+         "share a length unit; not a velocity or flux" if gradient and units_ok else
+         "not reported" + ("" if units_ok else " (geographic or unknown CRS)")),
+    ]
+
+
 def _apply_metadata(layer, items, warnings):
     metadata = layer.metadata()
     metadata.setAbstract(metadata_text(items, warnings))
@@ -502,12 +721,13 @@ def _apply_metadata(layer, items, warnings):
 @dataclass
 class ContourResult:
     contour_layer: object
-    extra_layers: list = field(default_factory=list)  # e.g. unsmoothed copy
+    extra_layers: list = field(default_factory=list)  # e.g. unsmoothed copy, flow arrows
     surface_layer: object = None
     interval: float = 0.0
     warnings: list = field(default_factory=list)
     summary: list = field(default_factory=list)
     metadata: list = field(default_factory=list)
+    arrow_layer: object = None
 
 
 def _load_written_layer(memory_layer, path, name, warnings):
@@ -554,6 +774,8 @@ def _steps(plan):
         steps.append(("clip", "Clipping contours"))
     if plan.smoothing:
         steps.append(("smooth", "Smoothing contours"))
+    if plan.groundwater and r.flow_arrows:
+        steps.append(("arrows", "Deriving flow arrows"))
     if r.source_type == SOURCE_POINTS and r.surface_mode != SURFACE_NONE:
         steps.append(("surface", "Preparing surface output"))
     steps.append(("style", "Styling and labelling"))
@@ -644,17 +866,43 @@ def _execute(plan, project, feedback, on_stage, written):
         stage("clip")
         lines = clip_lines(lines, plan.clip_polygon, plan.crs, context, child)
     unsmoothed = lines
+    smoothing_items = []
+    smoothed = bool(plan.smoothing)
     if plan.smoothing:
         stage("smooth")
-        lines = smooth_lines(lines, plan.smoothing[0], plan.smoothing[1], context, child)
+        if plan.groundwater:
+            lines, applied, rejected = smooth_groundwater(
+                lines, plan.cell_size, groundwater_smoothing_fallbacks(plan.smoothing), context, child
+            )
+            smoothed = applied is not None
+            smoothing_items, notes = _groundwater_smoothing_report(plan, applied, rejected, lines, unsmoothed)
+            warnings.extend(notes)
+        else:
+            lines = smooth_lines(lines, plan.smoothing[0], plan.smoothing[1], context, child)
 
     requested = clean_layer_name(r.output_name)
-    final_name = requested or default_layer_name(plan.base_name, plan.interval, smoothed=bool(plan.smoothing))
-    outputs = [(lines, final_name)]
-    if plan.smoothing and r.keep_unsmoothed:
-        outputs.append(
-            (unsmoothed, f"{requested} unsmoothed" if requested else default_layer_name(plan.base_name, plan.interval))
+    if plan.groundwater:
+        final_name = requested or "GW Contours"
+        unsmoothed_name = f"{final_name} - Unsmoothed"
+    else:
+        final_name = requested or default_layer_name(plan.base_name, plan.interval, smoothed=smoothed)
+        unsmoothed_name = f"{requested} unsmoothed" if requested else default_layer_name(plan.base_name, plan.interval)
+    outputs = [(lines, final_name, "contours")]
+    if smoothed and r.keep_unsmoothed:
+        outputs.append((unsmoothed, unsmoothed_name, "contours"))
+
+    # Groundwater flow arrows from the interpolated head surface
+    arrow_info = None
+    if plan.groundwater and r.flow_arrows:
+        stage("arrows")
+        arrows, arrow_info = build_flow_arrows(
+            surface, plan.arrow_support, plan.crs, plan.cell_size, r.arrow_count, r.arrow_scaling,
+            r.arrow_length, "GW Flow Direction",
         )
+        if arrow_info["count"] == 0:
+            warnings.append("No flow arrows could be drawn in the chosen area (surface too small or flat).")
+        else:
+            outputs.append((arrows, "GW Flow Direction", "arrows"))
 
     # 3. Optional surface output. The file is only *opened* as a layer at the
     #    very end: on Windows an open GDAL handle locks the file, and a locked
@@ -686,11 +934,17 @@ def _execute(plan, project, feedback, on_stage, written):
     stage("style")
     geopackage = r.output_mode == OUTPUT_GEOPACKAGE
     output_description = f"GeoPackage {r.geopackage_path}" if geopackage else "Temporary layer (save it to keep it)"
-    items = metadata_items(plan, output_description)
-    for index, (layer, name) in enumerate(outputs):
+    items = metadata_items(plan, output_description) + smoothing_items
+    if arrow_info is not None:
+        items = items + _arrow_metadata(plan, arrow_info)
+    for index, (layer, name, kind) in enumerate(outputs):
         layer.setName(name)
-        apply_style(layer, r.style_preset, r.label_mode, r.label_decimals)
-        _apply_metadata(layer, items + [("Smoothed geometry", bool(plan.smoothing) and index == 0)], warnings)
+        if kind == "arrows":
+            apply_arrow_style(layer, STYLE_PRESETS[r.style_preset]["color"])
+            _apply_metadata(layer, items, warnings)
+        else:
+            apply_style(layer, r.style_preset, r.label_mode, r.label_decimals)
+            _apply_metadata(layer, items + [("Smoothed geometry", smoothed and index == 0)], warnings)
 
     # 5. GeoPackage: write every layer first, then load them. No file handle
     #    is open until all writes have succeeded (see step 3).
@@ -702,7 +956,7 @@ def _execute(plan, project, feedback, on_stage, written):
         if new_file:
             written.append(("file", path, None))
         names = []
-        for layer, name in outputs:
+        for layer, name, _kind in outputs:
             safe = unique_name(name, existing)
             if safe != name:
                 warnings.append(f"A layer named '{name}' already exists in {os.path.basename(path)}; saved as '{safe}'.")
@@ -712,16 +966,22 @@ def _execute(plan, project, feedback, on_stage, written):
             existing.append(safe)
             names.append(safe)
         final_layers = []
-        for (memory_layer, _name), safe in zip(outputs, names):
+        for (memory_layer, _name, _kind), safe in zip(outputs, names):
             final_layers.append(_load_written_layer(memory_layer, path, safe, warnings))
     else:
-        final_layers = [layer for layer, _name in outputs]
+        final_layers = [layer for layer, _name, _kind in outputs]
+    arrow_layer = None
+    for (_layer, _name, kind), final in zip(outputs, final_layers):
+        if kind == "arrows":
+            arrow_layer = final
+    final_layers = [final for (_l, _n, kind), final in zip(outputs, final_layers) if kind != "arrows"]
 
     # 6. Nothing below may raise: outputs are complete and must not be rolled back.
     surface_layer = None
     if surface_out is not None:
         temporary = " (temporary)" if r.surface_mode != SURFACE_GEOTIFF else ""
-        surface_layer = QgsRasterLayer(surface_out, f"Surface {plan.base_name} ({METHOD_LABELS[r.method]}){temporary}")
+        surface_name = "GW Surface" if plan.groundwater else f"Surface {plan.base_name} ({METHOD_LABELS[r.method]})"
+        surface_layer = QgsRasterLayer(surface_out, f"{surface_name}{temporary}")
         if surface_layer.isValid():
             _apply_metadata(surface_layer, items, warnings)
         else:
@@ -733,8 +993,51 @@ def _execute(plan, project, feedback, on_stage, written):
         warnings.append("No contour lines were produced.")
     summary = plan.summary_lines() + [
         f"Output: '{contour_layer.name()}' with {contour_layer.featureCount()} line(s)"
-        + (", smoothed" if plan.smoothing else "")
+        + (", smoothed" if smoothed else "")
     ]
+    if arrow_info is not None:
+        summary += _arrow_summary(plan, arrow_info)
     return ContourResult(
-        contour_layer, final_layers[1:], surface_layer, plan.interval, warnings, summary, items
+        contour_layer, final_layers[1:], surface_layer, plan.interval, warnings, summary, items, arrow_layer
     )
+
+
+def _groundwater_smoothing_report(plan, applied, rejected, smoothed, original):
+    """Metadata items and warnings for Groundwater smoothing."""
+    cell = plan.cell_size
+    notes = []
+    if applied is None:
+        notes.append("IMPORTANT: smoothing was skipped because every setting tried made contours cross or "
+                     "become invalid; the contours are unsmoothed.")
+        return [("Smoothing applied", "none (all settings produced crossings or invalid lines)")], notes
+    iterations, offset, simplify, segment = applied
+    if rejected:
+        notes.append("Smoothing was reduced automatically to avoid contour crossings or invalid lines.")
+    shift = max_displacement(smoothed, original)
+    items = [
+        ("Smoothing applied",
+         f"Douglas-Peucker simplify {simplify * cell:.4g} ({simplify:g} cells), densify to "
+         f"{segment * cell:.4g} ({segment:g} cells), Chaikin {iterations} iteration(s), offset {offset:g}"
+         + (" (reduced automatically to avoid crossings)" if rejected else "")),
+        ("Maximum smoothing displacement", round(shift, 4) if shift is not None else "not measured (large output)"),
+        ("Smoothing validation", "no invalid geometries, no crossings between different levels"),
+        ("Smoothing note", "Smoothing changes line geometry for readability only; it does not increase accuracy."),
+    ]
+    return items, notes
+
+
+def _arrow_summary(plan, info):
+    """Result lines for flow arrows: count, generalized direction, gradient (only when defensible)."""
+    lines = [f"Flow arrows: {info['count']}"]
+    direction = info["direction"]
+    if direction:
+        lines.append(
+            f"General groundwater flow direction: {direction[2]} / approximately {direction[0]:.0f}° "
+            "(generalized interpretation)"
+        )
+    elif info["count"]:
+        lines.append("General flow direction: not reported (directions vary across the site)")
+    gradient = info["gradient"]
+    if gradient and plan.crs is not None and plan.crs.isValid() and not plan.crs.isGeographic():
+        lines.append(f"Hydraulic gradient: median {gradient[0]:.2g} (range {gradient[1]:.2g}–{gradient[2]:.2g})")
+    return lines

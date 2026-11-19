@@ -53,7 +53,7 @@ REQUIRED = [
     "core/__init__.py", "core/workflow.py", "core/options.py", "core/input_validation.py",
     "core/intervals.py", "core/grid.py", "core/report.py", "core/interpolation.py",
     "core/extent.py", "core/contouring.py", "core/clipping.py", "core/smoothing.py",
-    "core/styling.py", "core/output.py",
+    "core/styling.py", "core/output.py", "core/groundwater.py", "core/flow.py",
     "utils/__init__.py", "utils/qgis_helpers.py",
 ]
 #: Path fragments that must never be packaged.
