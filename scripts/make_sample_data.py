@@ -79,6 +79,14 @@ def bedrock_elev(dx, dy):
 # A well that was not drilled to bedrock: NULL bedrock elevation (a useful test condition).
 NO_BEDROCK = {"MW-04"}
 
+# Groundwater Mode demo fields (see sample_data/README.md):
+# mp_elev = measuring point (top of casing) 0.6 m above ground; dtw = mp_elev - gw_elev.
+STICKUP = 0.6
+NO_DTW = {"MW-10"}  # depth to water not measured: NULL
+DTW_ENTRY_ERROR = {"MW-12": 1.8}  # deliberate data-entry error (1.8 m too deep), flagged by the QA check
+# wl_text: water levels stored as text, as often found in spreadsheets.
+WL_TEXT_SPECIAL = {"MW-03": "N/A", "MW-08": "Dry"}
+
 BOUNDARY = [(-15, -10), (200, -20), (410, 5), (425, 160), (400, 295), (230, 315), (90, 300), (-20, 280), (-30, 120)]
 
 DEM_COLUMNS, DEM_ROWS, DEM_CELL = 240, 180, 2.0  # 480 x 360 m
@@ -109,7 +117,7 @@ def write_layer(layer, path, name):
 def make_wells():
     layer = QgsVectorLayer(
         f"Point?crs={CRS}&field=well_id:string(10)&field=gw_elev:double&field=ground_elev:double"
-        "&field=bedrock_elev:double",
+        "&field=bedrock_elev:double&field=mp_elev:double&field=dtw:double&field=wl_text:string(12)",
         "sample_wells",
         "memory",
     )
@@ -117,7 +125,11 @@ def make_wells():
     for well_id, dx, dy in WELLS:
         feature = QgsFeature(layer.fields())
         bedrock = None if well_id in NO_BEDROCK else round(bedrock_elev(dx, dy), 2)
-        feature.setAttributes([well_id, round(gw_elev(dx, dy), 2), round(ground_elev(dx, dy), 2), bedrock])
+        gw, ground = round(gw_elev(dx, dy), 2), round(ground_elev(dx, dy), 2)
+        mp = round(ground + STICKUP, 2)
+        dtw = None if well_id in NO_DTW else round(mp - gw + DTW_ENTRY_ERROR.get(well_id, 0.0), 2)
+        text = WL_TEXT_SPECIAL.get(well_id, f" {gw:.2f}" if dx > 200 else f"{gw:.2f}")
+        feature.setAttributes([well_id, gw, ground, bedrock, mp, dtw, text])
         feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(X0 + dx, Y0 + dy)))
         features.append(feature)
     layer.dataProvider().addFeatures(features)

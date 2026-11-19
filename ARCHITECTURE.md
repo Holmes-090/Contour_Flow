@@ -25,11 +25,13 @@ GIS Contour Plugin/                 <- git repository root (suggested repo name:
 │   │   ├── intervals.py       (P)  nice/fixed intervals, level counts, major classification
 │   │   ├── grid.py            (P)  automatic cell size, grid size limit
 │   │   ├── report.py          (P)  metadata text/JSON serialization, disclaimer
+│   │   ├── groundwater.py     (P)  Groundwater Mode: value parsing, heads, QA checks, flow-vector maths
+│   │   ├── flow.py                 GW Flow Direction arrows from the interpolated surface
 │   │   ├── interpolation.py        read points, temporary point layer, TIN/IDW
 │   │   ├── extent.py               extent modes, hull, buffer, boundary union + CRS transform
 │   │   ├── contouring.py           GDAL contour, editable copy with value/is_major
 │   │   ├── clipping.py             exact line clip, raster crop, surface mask
-│   │   ├── smoothing.py            QGIS Smooth (Chaikin)
+│   │   ├── smoothing.py            QGIS Smooth (Chaikin); GW: simplify + densify + Chaikin, validated
 │   │   ├── styling.py              major/minor renderer, labels, presets
 │   │   └── output.py               GeoPackage writing, existing names, rollback
 │   └── utils/
@@ -153,6 +155,64 @@ Windows an open layer locks its file, which would make rollback impossible.
 Every file or GeoPackage layer the run writes is recorded. On any exception,
 including cancellation, `output.remove_written` deletes them, so no partial
 outputs remain.
+
+### Groundwater Mode: `core/groundwater.py`, `core/flow.py`
+
+`ContourRequest.mode` is `general` (default) or `groundwater`. Every
+Groundwater branch in `workflow.py` is guarded by `plan.groundwater`, so
+General runs take the 0.1.0 code paths unchanged.
+
+Planning, in addition to the General steps:
+
+1. **Fields:** an existing head field (numeric or numeric text), or MP
+   elevation and depth to water (different fields). An optional ground
+   elevation field is read for QA only.
+2. **Values:** `interpolation.read_point_rows` reads raw attributes
+   (read-only). `groundwater.build_head_records` converts them with
+   `parse_number`: numbers pass, text is trimmed and converted, NULL and
+   blank are "no reading", other text (`Dry`, `N/A`, `202,51`) is "not a
+   number". Nothing is ever treated as 0. Calculated heads are
+   `MP - DTW`.
+3. **QA** (warnings, never removal):
+   - conflicting duplicate locations, with the nested-well explanation;
+   - head above ground (if a ground field is set);
+   - negative depth to water (calculated only);
+   - off-trend wells: least-squares plane, then a robust modified z-score
+     of the residuals (> 3.5, at least 5 wells) **and** a deviation of at
+     least 10 % of the head range;
+   - the General checks (fewer than 3 or collinear points, CRS, outside hull).
+4. **Arrow area:** convex hull (default), hull + buffer, boundary polygon,
+   or the whole contoured area; always intersected with the boundary and
+   clip polygon. An IMPORTANT warning appears when it reaches beyond the
+   hull (IDW extrapolates there; TIN has no values there).
+
+Execution adds two stages:
+
+- **Smoothing** (`smoothing.smooth_groundwater`): Douglas-Peucker simplify
+  (about 1 cell), densify (max segment 6 cells for Light, 16 for Medium),
+  Chaikin (3 iterations, offset 0.25). Each result is checked with
+  `geometry_problems` (GEOS validity, and crossings between lines of
+  different value via a spatial index). The first clean step of
+  `options.groundwater_smoothing_fallbacks` is kept. If none is clean, the
+  lines stay unsmoothed with an IMPORTANT warning. The maximum Hausdorff
+  displacement is recorded in the metadata.
+- **Flow arrows** (`flow.build_flow_arrows`): seeds on a regular grid over
+  the arrow area, spaced `sqrt(area / count)`. At each seed the head gradient
+  comes from central finite differences of the surface raster
+  (`provider.sample` at ±d in x and y, with d = max(2 cells, 0.15 × spacing)).
+  The flow vector is `-grad h`, and the azimuth is clockwise from grid
+  north. A seed needs all four samples (so no arrows where TIN has no
+  values) and the whole arrow inside the area. The output is a memory
+  LineString layer `GW Flow Direction` (`azimuth`, `gradient`, `head`) with
+  a QGIS Arrow symbol layer.
+- **Generalized direction:** the circular mean of the arrow azimuths,
+  reported only for at least 3 arrows with a mean resultant length of at
+  least 0.8. The **hydraulic gradient** (median and range of `|grad h|`) is
+  reported only for a projected CRS. No velocity or flux is computed.
+
+Layer names: `GW Contours`, `GW Contours - Unsmoothed`, `GW Surface`,
+`GW Flow Direction`. Every layer's metadata carries the groundwater items
+and `groundwater.DISCLAIMER`.
 
 ### Extent and clipping: `core/extent.py`, `core/clipping.py`
 

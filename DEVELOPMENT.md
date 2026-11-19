@@ -405,6 +405,9 @@ plugin entry is gone, and the "enabled" setting is per package name.
 | Contouring | `gdal:contour` | `INTERVAL`, `OFFSET` 0, `FIELD_NAME` `value`. Only file-based (GDAL provider) rasters work. |
 | Line clipping | `native:clip` | `OVERLAY` = a temporary memory polygon layer holding the clip polygon. The output is a memory layer. |
 | Smoothing | `native:smoothgeometry` | `ITERATIONS` 1–5 (the plugin's limit; QGIS allows 10), `OFFSET` 0.05–0.5, `MAX_ANGLE` 180. Chaikin corner cutting. |
+| GW smoothing: simplify | `native:simplifygeometries` | Groundwater Mode only. `METHOD` 0 (distance, Douglas-Peucker), `TOLERANCE` = 1 cell (Light/Custom), 1.5 cells (Medium). |
+| GW smoothing: densify | `native:densifygeometriesgivenaninterval` | Groundwater Mode only. `INTERVAL` = 6 cells (Light), 16 cells (Medium); this bounds Chaikin's displacement. |
+| GW flow arrows | none (PyQGIS) | `QgsRasterDataProvider.sample(point, 1)` on the interpolated surface: central differences. It returns `(nan, False)` outside the TIN's values and is fast (thousands of samples per second). |
 | Surface mask (surface output + clip polygon only) | `gdal:cliprasterbymasklayer` | `NODATA` = the surface's own NoData value, `CROP_TO_CUTLINE`, `KEEP_RESOLUTION`. |
 
 All of these come from the core **Processing** plugin, which must be

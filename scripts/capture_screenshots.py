@@ -11,7 +11,11 @@ Writes to ``docs/images/``:
   rendered by Qt, set up for the sample groundwater test;
 * ``groundwater_contours.png``: QGIS map rendering of the sample groundwater
   contours (Groundwater style, major labels) with the wells and site boundary;
-* ``dem_contours.png``: QGIS map rendering of contours from the sample DEM.
+* ``dem_contours.png``: QGIS map rendering of contours from the sample DEM;
+* ``dialog_groundwater.png``: the dialog in Groundwater Mode (calculated heads,
+  flow arrows on);
+* ``groundwater_flow.png``: Groundwater Mode result: light-smoothed GW
+  contours and GW Flow Direction arrows with the wells and site boundary.
 
 The contours are produced by the plugin's own workflow on ``sample_data/``.
 """
@@ -50,6 +54,7 @@ def render_map(layers, extent, path, size=(960, 680)):
 def main():
     from qgis.core import QgsProject
 
+    from contour_flow.core import groundwater as gw
     from contour_flow.core import options as opt
     from contour_flow.core.workflow import ContourRequest, run_contour_workflow
     from contour_flow.ui.contour_dialog import ContourDialog
@@ -100,6 +105,34 @@ def main():
     dem_contours = result.contour_layer
     project.addMapLayer(dem_contours)
     render_map([dem_contours, dem], dem.extent(), os.path.join(OUT, "dem_contours.png"))
+
+    # --- Groundwater Mode: dialog and result
+    dialog = ContourDialog()
+    dialog.point_layer_combo.setLayer(wells)
+    dialog.boundary_layer_combo.setLayer(site)
+    dialog.mode_combo.setCurrentIndex(dialog.mode_combo.findData(gw.MODE_GROUNDWATER))
+    dialog.gw_method_combo.setCurrentIndex(dialog.gw_method_combo.findData(gw.GW_CALCULATED))
+    dialog.flow_arrows_check.setChecked(True)
+    dialog.resize(520, 1080)
+    dialog.show()
+    QgsApplication.processEvents()
+    dialog._refresh_summary()
+    QgsApplication.processEvents()
+    dialog.grab().save(os.path.join(OUT, "dialog_groundwater.png"))
+    print(f"  {os.path.relpath(os.path.join(OUT, 'dialog_groundwater.png'), REPO)}")
+    dialog.cleanup()
+    dialog.hide()
+
+    result = run_contour_workflow(ContourRequest(
+        mode=gw.MODE_GROUNDWATER, point_layer=wells, value_field="gw_elev", boundary_layer=site,
+        smoothing_mode=opt.SMOOTH_LIGHT, flow_arrows=True, style_preset=opt.STYLE_GROUNDWATER,
+        label_mode=opt.LABELS_MAJOR))
+    project.addMapLayers([result.contour_layer, result.arrow_layer])
+    render_map([wells, result.arrow_layer, result.contour_layer, site], extent,
+               os.path.join(OUT, "groundwater_flow.png"))
+    for line in result.summary:
+        if "flow" in line.lower():
+            print(f"    {line}")
     project.clear()
 
 

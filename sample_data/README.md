@@ -19,6 +19,9 @@ All layers use **EPSG:32633** (WGS 84 / UTM zone 33N), a projected CRS in metres
 | `gw_elev` | Groundwater elevation (m) | Regional gradient falling to the north-east, with a small recharge mound in the north-west |
 | `ground_elev` | Ground surface elevation (m) | A broad hill in the centre-east |
 | `bedrock_elev` | Bedrock elevation (m) | Dipping to the north, with a buried channel. **MW-04 has no value** (not drilled to bedrock) |
+| `mp_elev` | Measuring-point (top of casing) elevation (m) | `ground_elev` + 0.6 |
+| `dtw` | Depth to water below the measuring point (m) | `mp_elev` − `gw_elev`. **MW-10 is NULL** (not measured). **MW-12 is 1.8 m too deep**, a deliberate data-entry error for the QA check |
+| `wl_text` | Groundwater elevation stored as **text** | Like `gw_elev`, some values padded with spaces; **MW-03 is `N/A`**, **MW-08 is `Dry`** |
 
 MW-13 lies **outside** the site boundary on purpose, so you can see the
 clipping at work.
@@ -77,6 +80,39 @@ a note that 1 point was skipped (MW-04 has no bedrock value).
 **Expected:** about 13 smooth, closed or edge-to-edge contour lines at 0.5 m
 intervals between about 101.5 and 107.5 m, around a hill and a shallow valley.
 Optionally clip to `site_boundary` to keep only the site.
+
+## Test 4: Groundwater Mode
+
+| Setting | Value |
+|---|---|
+| Mode | Groundwater |
+| Point layer | `sample_wells` |
+| Groundwater elevation | Existing field: `gw_elev` |
+| Clip to polygon | `site_boundary` |
+| Generate flow arrows | ticked |
+
+Click **Generate Contours**.
+
+**Expected:**
+
+- Blue, lightly smoothed **GW Contours** and a **GW Flow Direction** layer
+  with about ten arrows pointing north-east, from high to low groundwater
+  elevation, all inside the well network.
+- The message and the log give *General groundwater flow direction:
+  northeast / approximately 59°* and a hydraulic gradient of about 0.005.
+
+Then change **Groundwater elevation** to **Calculate: MP − depth to water**
+(`mp_elev`, `dtw`), and open **Advanced settings ▸ Groundwater** to set
+**Ground elevation (QA only)** to `ground_elev`.
+
+**Expected:** *12 usable groundwater elevations / 1 skipped* (MW-10), and an
+**IMPORTANT** warning that one well differs strongly from the site-wide
+trend: MW-12, whose depth to water was entered 1.8 m too deep. The contours
+bend around MW-12. This is why the check exists.
+
+Finally, choose **Existing field: `wl_text — text field, numeric values
+detected`**. **Expected:** *11 usable groundwater elevations / 2 skipped*,
+with `N/A` and `Dry` named in the summary.
 
 ## Things to try
 

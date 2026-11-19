@@ -4,7 +4,58 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [Unreleased] - 0.2.0 (Groundwater Mode, branch `groundwater-mode`)
+
+### Groundwater Mode
+
+- **Mode selector** at the top of the dialog: *General contours* (unchanged)
+  or *Groundwater*, for monitoring-well point layers.
+- **Groundwater elevations** from an existing field (any name), or
+  calculated as measuring-point elevation − depth to water. The source layer
+  is never modified.
+- **Numeric text fields** are offered as "WL — text field, numeric values
+  detected". Values are trimmed and converted. NULL and blank entries are
+  missing, other text (`Dry`, `N/A`) is skipped and reported, and nothing
+  is treated as 0. The dialog shows "N usable groundwater elevations / M
+  skipped".
+- **Groundwater QA** (warnings; wells are never removed):
+  - IMPORTANT: conflicting duplicate locations, explained as nested wells,
+    screens, duplicate points or different aquifers;
+  - IMPORTANT: heads above ground, using an optional ground-elevation field
+    for QA only;
+  - IMPORTANT: negative depth to water;
+  - IMPORTANT: off-trend wells (plane-detrended robust z-score > 3.5 and
+    ≥ 10 % of the head range);
+  - IMPORTANT: flow arrows beyond the well network;
+  - plus all General checks.
+- **Scale-aware smoothing** (Groundwater default *Light*): simplify, then
+  densify, then Chaikin. It is validated against invalid geometry and
+  crossings, with automatic milder fallbacks. The maximum displacement is
+  recorded. Smoothing does not increase accuracy.
+- **Flow arrows** (optional, "Generate flow arrows"): a `GW Flow Direction`
+  line layer with `azimuth`, `gradient` and `head`, and a blue, editable
+  QGIS arrow symbol.
+  - Direction is `−∇h` from central finite differences of the interpolated
+    surface.
+  - Arrows are sparse (about 9 by default) and limited to the well network
+    by default. Advanced options: count, uniform or gradient-scaled length,
+    size, and area (hull, hull + buffer, boundary, whole area).
+- **Generalized flow direction** (for example "northeast / approximately
+  59°") only when the arrows agree (circular mean, resultant length ≥ 0.8,
+  ≥ 3 arrows). It is labelled as a generalized interpretation.
+- **Hydraulic gradient** (median and range) only for a projected CRS. No
+  velocity or flux.
+- Groundwater summary, Groundwater styling (blue, thick majors, no well
+  labels), layer names `GW Contours`, `GW Contours - Unsmoothed`,
+  `GW Surface`, `GW Flow Direction`, and full groundwater metadata with an
+  interpretation note.
+- Sample data: `mp_elev`, `dtw` (one NULL, one deliberate 1.8 m entry
+  error) and `wl_text` (with `Dry` and `N/A`), plus a Groundwater Mode demo
+  in the README files.
+- Tests: 149 unit tests, 26 real-QGIS tests (6 new for Groundwater Mode,
+  including arrows on a synthetic south-east-falling head surface).
+
+### Repository (already on `main`)
 
 Repository changes for publishing; the plugin package is unchanged.
 

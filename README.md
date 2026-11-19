@@ -20,6 +20,9 @@ other layer.
   choice of styles (Neutral, Topographic, Groundwater).
 - **Edit and keep the results:** the output is a normal QGIS line layer. Move
   lines, change the style, or save it to a GeoPackage.
+- **Groundwater Mode:** turn monitoring wells into groundwater-elevation
+  contours, with groundwater data checks and optional flow-direction arrows
+  (see below).
 
 It uses QGIS's own interpolation and contouring tools, so there is nothing
 extra to install.
@@ -54,11 +57,77 @@ layer, so to keep it, right-click it and choose **Make Permanent**, or set
 - **Your settings travel with the result:** every contour layer records how it
   was made, in **Layer Properties ▸ Metadata**.
 
+## Groundwater Mode
+
+Choose **Mode: Groundwater** at the top of the window for a workflow made for
+monitoring-well data: wells, groundwater elevations, checks, contours and
+flow direction.
+
+![Groundwater contours and flow arrows](docs/images/groundwater_flow.png)
+
+- **Groundwater elevations, your way:** use a field that already holds them
+  (any name), or let Contour Flow calculate them as *measuring-point
+  elevation − depth to water*. Your layer is never changed.
+- **Spreadsheet-style text values work:** a text field such as `WL` holding
+  `"202.51"` is offered as *"WL — text field, numeric values detected"*.
+  Entries like `Dry` or `N/A` and blanks are skipped and reported, never
+  treated as 0. The window shows, for example, *13 usable groundwater
+  elevations / 4 skipped*.
+- **Groundwater checks before you rely on the map.** Warnings marked
+  *IMPORTANT* cover:
+  - wells at the same location with different values (often nested wells,
+    different screens or aquifers);
+  - groundwater above ground (with an optional ground-elevation field; this
+    can be real artesian conditions);
+  - wells far off the site-wide trend;
+  - areas where values are extrapolated beyond the wells.
+
+  Problem wells are kept, not removed.
+- **Readable, honest contours:** blue Groundwater styling, and *Light*
+  smoothing by default. The smoothing is checked, so it never makes contours
+  cross, and the result records how far lines moved. Smoothing makes contours
+  easier to read but not more accurate.
+- **Flow arrows (optional):** tick **Generate flow arrows** to add a
+  **GW Flow Direction** layer. The arrows represent interpreted
+  hydraulic-gradient direction derived from the interpolated groundwater
+  surface. They point from higher to lower groundwater elevation, are drawn
+  only where wells support the surface (the well network by default), and are
+  kept few so the map stays readable. When the directions agree, the result
+  also gives a *general groundwater flow direction* (for example "northeast /
+  approximately 60°"). This is a generalized interpretation, not measured flow.
+- **Everything is recorded:** the layers' metadata lists the wells used and
+  skipped, the method, smoothing, arrow settings and all warnings.
+
+Output layers are named **GW Contours**, **GW Flow Direction**, and,
+optionally, **GW Contours - Unsmoothed** and **GW Surface**. Arrow count,
+length, scaling and the area they cover are under **Advanced settings ▸
+Groundwater**.
+
+Groundwater Mode does not calculate flow velocity, flux, travel times or
+contaminant transport.
+
 ## Try it with the sample data
 
 The [`sample_data`](sample_data/README.md) folder has a small, fictional
 example: 13 wells, a site boundary and a DEM. Open
-`contour_flow_sample.qgs` in QGIS and follow the three short tests in its README.
+`contour_flow_sample.qgs` in QGIS and follow the short tests in its README.
+
+### Groundwater Mode demo
+
+1. Open `sample_data/contour_flow_sample.qgs` and start Contour Flow.
+2. Set **Mode** to **Groundwater**, **Point layer** to `sample_wells`, and
+   **Clip to polygon** to `site_boundary`.
+3. Keep **Groundwater elevation: Existing field** with `gw_elev`, and tick
+   **Generate flow arrows**.
+4. Click **Generate Contours**. You get blue GW Contours and about ten arrows
+   pointing north-east. The message gives the general flow direction:
+   north-east, about 60°.
+5. Now switch **Groundwater elevation** to **Calculate: MP − depth to water**
+   (`mp_elev`, `dtw`). The summary reports 1 skipped well (MW-10 has no
+   depth to water) and an **IMPORTANT** warning for MW-12. Its depth to water
+   was deliberately entered 1.8 m too deep, and the check catches it.
+6. Try the text field `wl_text`: 11 usable values, with `Dry` and `N/A`
+   reported and skipped.
 
 ![Contours from the sample DEM](docs/images/dem_contours.png)
 

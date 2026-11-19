@@ -66,6 +66,9 @@ tests\integration\run_qgis_integration_tests.bat
 | `boundary_wgs84` (EPSG:4326) | One quadrilateral | Exercises the CRS transformation to the points' UTM CRS. |
 | `boundary_multi` (EPSG:32633) | A two-part multipolygon plus an invalid "bow-tie" | Multipart handling, repair, and selected-only mode. |
 | `gradient_dem.tif` (EPSG:32633) | 200 × 100 cells of 1 m, value `50 + 0.1·column`, NoData −9999 | Contour level L must lie on the line x = (L − 50)/0.1 + 0.5 m. |
+| `gw_wells` (EPSG:32633) | 13 wells over 200 × 200 m with `head`, `mp_elev`, `dtw`, `ground`, `wl_text`, plus 4 records without a usable head (NULL, `Dry`, `N/A`, blank) | Heads lie on `100 − 0.01·dx + 0.01·dy`, so flow is exactly **south-east (135°)** with gradient 0.01·√2. |
+| `gw_qa_wells` | The 13 wells with one +1.5 m off-trend head, one head above ground and a nested well with a different head | Each QA warning has exactly one known cause. |
+| `gw_boundary_wgs84` (EPSG:4326) | The UTM rectangle (20, 20)–(180, 120) | Boundary-clipped arrows and contours across CRSs. |
 
 ### What the suite verifies
 
@@ -88,9 +91,15 @@ tests\integration\run_qgis_integration_tests.bat
 | Styling and labels | For each preset: categorized renderer on `is_major`, widths 0.25 / 0.6 mm, preset colour, label field `value`, decimals, curved placement, and the major-only rule filter. |
 | Plugin load + dialog | `classFactory`, toolbar and menu action, icon. The dialog with real QGIS widgets filters layers and fields correctly; **Generate** through the dialog adds the layer and restores the cursor; unload and two reload cycles leave nothing behind. |
 | Dialog: simple view, Advanced, first-run messages | Empty project shows the "add a point layer or raster" message; a raster-only project starts in Raster mode; a point layer without numeric fields is explained; Advanced is collapsed by default; dependent controls enable/disable correctly (IDW power, manual cell size, hull buffer, custom extent, custom smoothing, major frequency, boundary options); the request carries the Advanced values; the summary shows the concise fields. |
-| Sample data (README tests) | The three `sample_data/README.md` tests plus bedrock: sensible level counts, everything inside the site boundary, majors on whole metres, NULL bedrock reported; the DEM test; the sample project opens with the right layer order. |
+| Sample data (README tests) | The four `sample_data/README.md` tests plus bedrock. Test 4 (Groundwater Mode): about ten north-east arrows and the generalized direction, 12 usable / 1 NULL with only MW-12 flagged in calculated mode, 11 usable / 2 text for `wl_text`. Also: sensible level counts, everything inside the site boundary, majors on whole metres, NULL bedrock reported; the DEM test; the sample project opens with the right layer order. |
 | Desktop sequence: contour project layers, reopen project | Regression for a crash found in this milestone: open the sample project, contour its raster and points, add the results, pump the event loop, reopen the project. Three rounds. |
 | Plugin discovery from QGIS profile | QGIS's own plugin scanner finds "Contour Flow" through the development link. Skipped if the link doesn't exist. |
+| GW existing field | Groundwater run with Light smoothing, unsmoothed copy, surface and arrows. Checks: layer names; source layer unchanged; values preserved; no invalid geometry or crossings; vertex displacement ≤ 2 cells, recorded in metadata; every arrow at 135° ± 1°, gradient within 2 %, drawn towards the south-east, inside the hull; Arrow symbol; summary gives "southeast / approximately 135°" and the gradient, and no velocity; metadata has the flow method and disclaimer. |
+| GW calculated head | MP − DTW gives 13 heads and the same levels as the head field; the metadata names the calculation; the same field twice is an error. |
+| GW numeric text field | `wl_text` is offered as "text field, numeric values detected", `well_id` is not; 13 used, 2 NULL/blank and 2 text (`Dry`, `N/A`) reported; minimum head shows no text became 0; a field with no numbers is an error. |
+| GW boundary in another CRS | WGS84 boundary: contours and arrows inside it, for both the hull and the boundary arrow areas; still south-east. |
+| GW QA warnings and errors | Nested-well, head-above-ground (naming the right feature) and off-trend IMPORTANT warnings, with the run still allowed; errors for fewer than 3 wells and raster input; the IDW and TIN warnings for arrows beyond the wells; TIN draws no arrows outside the hull; geographic-CRS warning. |
+| GW dialog | Starts in General; switching to Groundwater shows the GW controls, sets the Groundwater style and Light smoothing, preselects `head`/`mp_elev`/`dtw`/`ground`, labels `wl_text` as numeric text; the summary and "13 usable groundwater elevations / 4 skipped"; arrow settings follow the checkbox; **Generate** adds GW Contours and GW Flow Direction; switching back restores the General style. |
 
 ### Reading a failure
 
@@ -159,3 +168,11 @@ ground on real QGIS, so they are not part of the project's test suite.
 - Release readiness (0.1.0): 113 unit tests and **20 real-QGIS tests** pass,
   together with the package test. The new tests found and fixed a crash
   (multi-step feedback) that affected desktop use.
+- Groundwater Mode (0.2.0, branch `groundwater-mode`): 149 unit tests and
+  **26 real-QGIS tests** (the 20 General tests unchanged, plus 6 Groundwater
+  tests) pass, together with the package test. Running on the sample data
+  found that Douglas-Peucker followed by Chaikin moved lines by up to 5.5 m
+  and could make them cross. Densifying first, validating, and falling back
+  to milder settings fixed this (≤ 1 m). The same run showed that the
+  outlier check flagged a real recharge mound. A minimum deviation of 10 %
+  of the head range fixed that.
